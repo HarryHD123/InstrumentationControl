@@ -6,6 +6,7 @@
 # 4. Adjust oscilloscope settings
 # 5. Send commands to MATLAB to connect to and instruct the oscilloscope
 
+from logging import PlaceHolder
 import pyvisa
 import time
 
@@ -116,6 +117,15 @@ def oscope_trigger_settings(channel, trigger_level):
     command(oscope, f"TRIG:A:LEV1 {trigger_level}")  # Trigger level set
     oscope.query_opc()
 
+def oscope_siggen(volt, freq):
+    command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
+    command(oscope, ":WGEN:OUTPut ON")
+    for v in volt:
+        command(oscope, f":WGEN:VOLTage {v}")
+        for f in freq:
+            command(oscope, f":WGEN:FREQuency {f}")
+
+
 
 def voltage_measure(channel, meas_chan=1, main='PEAK'):  # can change main to choose PEAK, MEAN, RMS, etc.
     """Measures voltage"""
@@ -170,13 +180,16 @@ def phase_measure(channel_1, channel_2, meas_chan=1):
 # Main
 
 # Connect to Instruments
-
+quick = 1
 oscope = connect_instrument(oscilloscope1_string)
-mmeter = connect_instrument(multimeter1_string)
-psource = connect_instrument(powersupply1_string)
-siggen = connect_instrument(signalgenerator1_string)
+instruments = (oscope,PlaceHolder)
+if quick == 0:
+    mmeter = connect_instrument(multimeter1_string)
+    psource = connect_instrument(powersupply1_string)
+    siggen = connect_instrument(signalgenerator1_string)
+    instruments = (oscope, mmeter, psource, siggen)
 
-instruments = (oscope, mmeter, psource, siggen)
+
 
 for instrument in instruments:
     try:
@@ -190,10 +203,13 @@ for instrument in instruments:
 oscope_preset()
 oscope_default_settings(1)
 oscope_default_settings(2)
-V = oscope.read()
-print("V:", V)
-read(oscope, f"MEASurement Vpp RESult:PPEak?")
-voltage_measure(1)
+#V = oscope.read()
+#print("V:", V)
+#read(oscope, f"MEASurement Vpp RESult:PPEak?")
+
+oscope_siggen((1,10),(1,10,100))
+
+print(voltage_measure(1))
 oscope_offset(1, '10000')
 
 # V1 = voltage_measure('1', '1')
