@@ -6,7 +6,6 @@
 # 4. Adjust oscilloscope settings
 # 5. Send commands to MATLAB to connect to and instruct the oscilloscope
 
-from logging import PlaceHolder
 import pyvisa
 import time
 
@@ -117,15 +116,49 @@ def oscope_trigger_settings(channel, trigger_level):
     command(oscope, f"TRIG:A:LEV1 {trigger_level}")  # Trigger level set
     oscope.query_opc()
 
-def oscope_siggen(volt, freq):
+
+def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
     command(oscope, ":WGEN:OUTPut ON")
-    for v in volt:
-        command(oscope, f":WGEN:VOLTage {v}")
-        for f in freq:
-            command(oscope, f":WGEN:FREQuency {f}")
+    command(oscope, f":WGEN:VOLTage {v}")
+    command(oscope, f":WGEN:VOLTage:OFFset {offset}")
+    command(oscope, f":WGEN:FREQuency {f}")
 
 
+def autoscale(v, f, chan):
+    """Autoscales so the waveform always fits the screen"""
+
+    # Initial time axis adjustment
+    testf = f # a test frequency, testf, is used to work out the initial settings. testf is set to the first value of the range of frequencies used for the frequency response
+    timespan = 1/testf*3 # initialise time span to three periods of the signal of frequency testf
+    command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
+    g = 10  # initial gain estimate, this will set the vertical range to twice the first pk-pk voltage
+    
+    # Adjusts time axis
+    if timespan > 10*1/f: # if too many periods are shown reduce timespan
+        timespan = 1/(f*3)
+        command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
+
+    # Adjusts voltage axis
+    command(oscope, f"channel{chan}:SCALE {g*v/10}")
+    command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk voltage
+    v_meas=fscanf(obj2,'%f')
+    #command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk input voltage
+    #vinm(i)=fscanf(obj2,'%f')
+            
+    while v_meas > (0.85*g*v):   # if the pk-pk output voltage occupies more than 85% of the screen, change volts/div
+        g = 1.5*g
+        command(oscope, f"channel{chan}:SCALE {g*v/10}")
+        #pause(0.5)
+        command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk voltage
+        v_meas = fscanf(obj2,'%f')
+            
+        if v_meas < 0.3*g*v:  # if the pk-pk output voltage occupies less than 30% of the screen, change volts/div
+            g = g/3
+            command(oscope, f"channel{chan}:SCALE {g*v/10}")
+            #pause(0.5)
+            command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk voltage
+            v_meas = fscanf(obj2,'%f')
 
 def voltage_measure(channel, meas_chan=1, main='PEAK'):  # can change main to choose PEAK, MEAN, RMS, etc.
     """Measures voltage"""
@@ -182,14 +215,12 @@ def phase_measure(channel_1, channel_2, meas_chan=1):
 # Connect to Instruments
 quick = 1
 oscope = connect_instrument(oscilloscope1_string)
-instruments = (oscope,PlaceHolder)
+instruments = [oscope]
 if quick == 0:
     mmeter = connect_instrument(multimeter1_string)
     psource = connect_instrument(powersupply1_string)
     siggen = connect_instrument(signalgenerator1_string)
-    instruments = (oscope, mmeter, psource, siggen)
-
-
+    instruments = [oscope, mmeter, psource, siggen]
 
 for instrument in instruments:
     try:
@@ -200,17 +231,29 @@ for instrument in instruments:
 
 # Control Instruments
 
+Vin_PP = [0.4]
+Offset = 0.0
+Frequencies = [1,10,100,1000]
+
 oscope_preset()
 oscope_default_settings(1)
 oscope_default_settings(2)
+
+for v in Vin_PP:
+    command(oscope, f":WGEN:VOLTage {v}")
+    command(oscope, f":WGEN:VOLTage:OFFset {Offset}")
+    for f in Frequencies:
+        oscope_set_siggen(v,f)
+        #autoscale(v, f)
+        time.sleep(0.5) # wait for changes to take effect
+        #command(oscope, "SINGle") # take a measurement
+
 #V = oscope.read()
 #print("V:", V)
 #read(oscope, f"MEASurement Vpp RESult:PPEak?")
 
-oscope_siggen((1,10),(1,10,100))
-
-print(voltage_measure(1))
-oscope_offset(1, '10000')
+#print(voltage_measure(1))
+#oscope_offset(1, '10000')
 
 # V1 = voltage_measure('1', '1')
 #
