@@ -125,7 +125,7 @@ def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, f":WGEN:FREQuency {f}")
 
 
-def autoscale(v, f, chan):
+def autoscale(v, f, chan, meas_chan):
     """Autoscales so the waveform always fits the screen"""
 
     # Initial time axis adjustment
@@ -139,71 +139,49 @@ def autoscale(v, f, chan):
         timespan = 1/(f*3)
         command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
 
-    # Adjusts voltage axis
+    # Initial voltage axis adjustment
     command(oscope, f"channel{chan}:SCALE {g*v/10}")
-    command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk voltage
-    v_meas=fscanf(obj2,'%f')
-    #command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk input voltage
-    #vinm(i)=fscanf(obj2,'%f')
+    v_meas = read_measurement(meas_chan)
             
+    # Adjusts voltage axis
     while v_meas > (0.85*g*v):   # if the pk-pk output voltage occupies more than 85% of the screen, change volts/div
         g = 1.5*g
         command(oscope, f"channel{chan}:SCALE {g*v/10}")
-        #pause(0.5)
-        command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk voltage
-        v_meas = fscanf(obj2,'%f')
+        v_meas = read_measurement(meas_chan)
             
         if v_meas < 0.3*g*v:  # if the pk-pk output voltage occupies less than 30% of the screen, change volts/div
             g = g/3
             command(oscope, f"channel{chan}:SCALE {g*v/10}")
-            #pause(0.5)
-            command(oscope, f"MEAS{chan}:RESult?") # measure pk-pk voltage
-            v_meas = fscanf(obj2,'%f')
-
-def voltage_measure(channel, meas_chan=1, main='PEAK'):  # can change main to choose PEAK, MEAN, RMS, etc.
-    """Measures voltage"""
-
-    command(oscope, f"MEASurement {meas_chan} :ON")
-    command(oscope, f"MEASurement {meas_chan} :SOURce CH {channel}")
-    command(oscope, f"MEASurement {meas_chan} :MAIN {main}")
-    command(oscope, f"MEASurement {meas_chan} STATitics ON")
-    command(oscope, f"MEASurement {meas_chan} STATitics RESet")
-    time.sleep(0.3)  # Wait for stats to be reset and for a few values to be taken
-    # V_string = read(oscope, f"MEASurement {type} RESult:PPEak?")
-    command(oscope, f"MEASurement {meas_chan} RESult:AVG?") # Request voltage
-    # command('MEASurement' + measurement + ':RESult:PPEak?')
-    time.sleep(0.75)
-    V_string = oscope.read()
-    V = float(V_string)
-
-    # CHECK If fails trying changing type to 1,2,3,4 or Vpp etc
-
-    return V
+            v_meas = read_measurement(meas_chan)
 
 
-def phase_measure(channel_1, channel_2, meas_chan=1):
-    """Measures the phase difference between two channel"""
+def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2=2):
+    """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
+    
+    command(oscope, f"MEASurement{meas_chan}:ON")
+    print(meas_type)
+    print(meas_type == 'PHASe')
+    if meas_type == 'PHASe':
+        command(oscope, f"MEASurement{meas_chan}:SOURce CH{source_chan_2},CH{source_chan_1}") # Set sources to be chosen channels
+        command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
+    else:
+        command(oscope, f"MEASurement{meas_chan}:SOURce CH{source_chan_1}")
+        command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
 
-    command(oscope, f"MEASurement {meas_chan} :ON")
-    command(oscope, f"MEASurement {meas_chan} :SOURce CH{channel_1},CH{channel_2}") # Set sources to be chosen channels
-    command(oscope, f"MEASurement {meas_chan} :MAIN PHASe")
-    command(oscope, f"MEASurement {meas_chan} STATitics ON")
-    command(oscope, f"MEASurement {meas_chan} STATitics RESet")
-    time.sleep(0.3)  # Wait for stats to be reset and for a few values to be taken
-    #command(oscope, f"MEASurement {meas_chan} RESult:PPEak?") # Request phase difference
-    command(oscope, f"MEASurement {meas_chan} RESult:AVG?") # Request phase difference
-    phase_string = oscope.read()
-    phase = float(phase_string)
 
-    # CHECK
+def read_measurement(meas_chan, meas_type=0):
+    """Reads a specified measurement channel."""
 
-    # If statements to detect an invalid output from instrument which can occur if the voltage is very low (1mV)
-    if phase > 180:
-        phase = None  # None is value that can be recorded in a list but will not display on a plot
-    elif phase < -180:
-        phase = None
+    time.sleep(0.5)
+    if meas_type == 0:
+        command(oscope, f"MEASurement{meas_chan}:RESult?")
+    else:
+        command(oscope, f"MEASurement{meas_chan}:RESult:{meas_type}?")
+    time.sleep(0.5) # Time for the oscilloscope to load the result
+    value_string = oscope.read()
+    value = float(value_string)
 
-    return phase
+    return value
 
 
 # -------------------------------
@@ -231,29 +209,40 @@ for instrument in instruments:
 
 # Control Instruments
 
-Vin_PP = [0.4]
-Offset = 0.0
-Frequencies = [1,10,100,1000]
-
+# Set up oscilloscope
 oscope_preset()
 oscope_default_settings(1)
 oscope_default_settings(2)
 
+# Set up measurement channels
+measurement_channel_setup(1, 'PEAK', 1)
+measurement_channel_setup(2, 'PEAK', 2)
+measurement_channel_setup(3, 'PHASe', 1, 2)
+
+# Set parameters
+Vin_PP = [0.4, 1, 1.5]
+Offset = 0.0
+Frequencies = [10,100,1000,10000]
+
+# Initiate result variables
+v_in_list = []
+v_out_list = []
+phase_list = []
+results_dict = {} 
+
 for v in Vin_PP:
-    command(oscope, f":WGEN:VOLTage {v}")
-    command(oscope, f":WGEN:VOLTage:OFFset {Offset}")
     for f in Frequencies:
         oscope_set_siggen(v,f)
-        #autoscale(v, f)
-        time.sleep(0.5) # wait for changes to take effect
-        #command(oscope, "SINGle") # take a measurement
+        autoscale(v, f, 1, 1)
+        autoscale(v, f, 2, 2)
+        time.sleep(1) # wait for changes to take effect
+        v_in = read_measurement(1)
+        v_out = read_measurement(2)
+        phase = read_measurement(3)
+        v_in_list.append(v_in)
+        v_out_list.append(v_out)
+        phase_list.append(phase)
+        results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
 
-#V = oscope.read()
-#print("V:", V)
-#read(oscope, f"MEASurement Vpp RESult:PPEak?")
-
-#print(voltage_measure(1))
-#oscope_offset(1, '10000')
-
-# V1 = voltage_measure('1', '1')
-#
+#print(v_in_list, v_out_list, phase_list)
+print(results_dict)
