@@ -28,6 +28,12 @@ def command(instrument, command):
     "Writes to oscilloscope"
     print(instrument.write(command))
 
+def read(instrument, command):
+    "Reads from oscilloscope"
+    info = instrument.query(command)
+
+    return info
+
 
 # ------------------
 # SETUP FUNCTIONS SETTINGS
@@ -54,7 +60,7 @@ def connect_instrument(instrument_string):
 
 def req_info(instrument):
     "Requests information from the oscilloscope"
-    idn = instrument.query('*IDN?')
+    idn = read(instrument, '*IDN?')
     print(f"\nHello, I am: '{idn}'")
 
 
@@ -116,7 +122,7 @@ def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, f":WGEN:FREQuency {f}")
 
 
-def autoscale(v, f, chan, meas_chan):
+def auto_adjust(v, f, chan, meas_chan): # FIX
     """Autoscales so the waveform always fits the screen"""
 
     # Initial time axis adjustment
@@ -150,8 +156,6 @@ def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2
     """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
     
     command(oscope, f"MEASurement{meas_chan}:ON")
-    print(meas_type)
-    print(meas_type == 'PHASe')
     if meas_type == 'PHASe':
         command(oscope, f"MEASurement{meas_chan}:SOURce CH{source_chan_2},CH{source_chan_1}") # Set sources to be chosen channels
         command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
@@ -174,6 +178,17 @@ def read_measurement(meas_chan, meas_type=0):
 
     return value
 
+
+def acquire_waveform(chan):
+    command(oscope, f"CHAN{chan}:DATA?")
+    data_list = []
+    data = oscope.read_bytes(1)
+    data_list.append(data)
+
+    print(data_list)
+
+    waveform = 0
+    return waveform
 
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
@@ -221,19 +236,30 @@ v_out_list = []
 phase_list = []
 results_dict = {} 
 
-for v in Vin_PP:
-    for f in Frequencies:
-        oscope_set_siggen(v,f)
-        autoscale(v, f, 1, 1)
-        autoscale(v, f, 2, 2)
-        time.sleep(1) # wait for changes to take effect
-        v_in = read_measurement(1)
-        v_out = read_measurement(2)
-        phase = read_measurement(3)
-        v_in_list.append(v_in)
-        v_out_list.append(v_out)
-        phase_list.append(phase)
-        results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
+oscope_set_siggen(0.4,1000)
+time.sleep(3)
+values = acquire_waveform(1)
+print(values)
+list = []
+for i in range(values):
+    list.append(i)
 
-#print(v_in_list, v_out_list, phase_list)
-print(results_dict)
+
+
+# for v in Vin_PP:
+#     for f in Frequencies:
+#         oscope_set_siggen(v,f)
+#         #auto_adjust(v, f, 1, 1)
+#         #auto_adjust(v, f, 2, 2)
+#         time.sleep(3) # wait for changes to take effect
+#         v_in = read_measurement(1)
+#         v_out = read_measurement(2)
+#         phase = read_measurement(3)
+#         values = acquire_waveform(1)
+#         print(values)
+#         v_in_list.append(v_in)
+#         v_out_list.append(v_out)
+#         phase_list.append(phase)
+#         results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
+
+# print(results_dict)
