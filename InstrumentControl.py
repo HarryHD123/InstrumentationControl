@@ -29,15 +29,6 @@ def command(instrument, command):
     print(instrument.write(command))
 
 
-def read(instrument, command):
-    "Reads from oscilloscope"
-
-    info = instrument.query(command)
-    print(info)
-
-    return info
-
-
 # ------------------
 # SETUP FUNCTIONS SETTINGS
 # -----------------
