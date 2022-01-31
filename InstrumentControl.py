@@ -6,6 +6,7 @@
 # 4. Adjust oscilloscope settings
 # 5. Send commands to MATLAB to connect to and instruct the oscilloscope
 
+from __future__ import print_function
 import pyvisa
 import time
 
@@ -50,6 +51,7 @@ def connect_instrument(instrument_string):
         instrument.visa_timeout = 5000  # Timeout for VISA Read Operations
         instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
         instrument.instrument_status_checking = True  # Error check after each command
+        instrument.baud_rate = 1000 # Set Buffer size
     except Exception as ex:
         print('Error initializing the instrument ' + instrument_string + ' session:\n' + ex.args[
             0])  # Gives error message if connection fails
@@ -179,15 +181,22 @@ def read_measurement(meas_chan, meas_type=0):
     return value
 
 
-def acquire_waveform(chan):
+def acquire_waveform(chan, method="ascii"):
+    """Acquires the waveform either using read_ascii_values or by reading each byte individually. Set method to 'ascii' or 'byte'"""
     command(oscope, f"CHAN{chan}:DATA?")
-    data_list = []
-    data = oscope.read_bytes(1)
-    data_list.append(data)
 
-    print(data_list)
+    if method == "ascii":
+        waveform = oscope.read_ascii_values()
+    elif method == "byte":
+        byte_count = 0
+        while byte_count != oscope.baud_rate:
+            data_list = []
+            data = oscope.read_bytes(1)
+            data_list.append(data)
+            byte_count += 1
+            print(byte_count)
+        waveform = data_list
 
-    waveform = 0
     return waveform
 
 # -------------------------------
@@ -245,7 +254,7 @@ for i in range(values):
     list.append(i)
 
 
-
+print(acquire_waveform(1, 'byte'))
 # for v in Vin_PP:
 #     for f in Frequencies:
 #         oscope_set_siggen(v,f)
