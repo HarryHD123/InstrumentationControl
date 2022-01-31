@@ -6,7 +6,6 @@
 # 4. Adjust oscilloscope settings
 # 5. Send commands to MATLAB to connect to and instruct the oscilloscope
 
-from __future__ import print_function
 import pyvisa
 import time
 
@@ -51,7 +50,6 @@ def connect_instrument(instrument_string):
         instrument.visa_timeout = 5000  # Timeout for VISA Read Operations
         instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
         instrument.instrument_status_checking = True  # Error check after each command
-        instrument.baud_rate = 1000 # Set Buffer size
     except Exception as ex:
         print('Error initializing the instrument ' + instrument_string + ' session:\n' + ex.args[
             0])  # Gives error message if connection fails
