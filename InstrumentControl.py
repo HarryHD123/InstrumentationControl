@@ -377,7 +377,8 @@ times, voltages = acquire_waveform(1)
 #print (times)
 #print(voltages)
 print(len(times), len(voltages))
-
+plt.plot(times, voltages)
+plt.show()
 
 #yrange_cmd=['channel3:RANGe ' num2str(3*vinpp)];
 #command(oscope, f'CHAN1:RANG 500);
