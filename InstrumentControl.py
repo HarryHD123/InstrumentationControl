@@ -6,8 +6,10 @@
 # 4. Adjust oscilloscope settings
 # 5. Send commands to MATLAB to connect to and instruct the oscilloscope
 
+from math import ceil
 import pyvisa
 import time
+import matplotlib.pyplot as plt
 
 rm = pyvisa.ResourceManager()
 
@@ -75,8 +77,8 @@ def oscope_preset():
     command(oscope, '*RST')
 
 
-def oscope_default_settings(channel='1', coupling='DC', offset='0.0', horizontal_range='5.0'):
-    command(oscope, "TIM:ACQT 0.01")  # 10ms Acquisition time
+def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0'):
+    command(oscope, f"TIM:ACQT {acquisition_time}")  # 10ms Acquisition time
     command(oscope, f"CHAN{channel}:RANG {horizontal_range}")  # Horizontal range 5V (0.5V/div)
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset 0
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling DC 1MOhm
@@ -91,6 +93,10 @@ def oscope_channel_switch(channel, on_off):
     elif on_off == '1':
         on_off = "ON"
     command(oscope, f"CHAN{channel}:STAT {on_off}")  # Switch Channel ON or OFF
+
+
+def oscope_acq_time(acquisition_time):
+    command(oscope, f"TIM:ACQT {acquisition_time}")  # 10ms Acquisition time
 
 
 def oscope_range(channel, horizontal_range):
@@ -109,10 +115,14 @@ def oscope_trigger_settings(channel, trigger_level):
     """Sets Trigger Settings"""
     command(oscope, "TRIG:A:MODE AUTO")  # Trigger Auto mode in case of no signal is applied
     command(oscope, "TRIG:A:TYPE EDGE;:TRIG:A:EDGE:SLOP POS")  # Trigger type Edge Positive
-    command(oscope, f"TRIG:A:SOUR CH {channel}")  # Trigger source Channel set
-    command(oscope, f"TRIG:A:LEV1 {trigger_level}")  # Trigger level set
-    oscope.query_opc()
+    #command(oscope,'TRIGger:SLOpe POSitive')
+    command(oscope, f"TRIG:A:SOUR CH{channel}")  # Trigger source Channel set
+    command(oscope, f"TRIG:A:LEV{trigger_level}")  # Trigger level set
 
+#command(oscope,':TRIGger:EDGE:SOURce channel3');
+#command(oscope,'TRIGger:MODE EDGE');                 
+#command(oscope,'TRIGger:SLOpe POSitive');
+#command(oscope,'TRIGger:LEVel 0');
 
 def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
@@ -126,8 +136,8 @@ def auto_adjust(v, f, chan, meas_chan): # FIX
     """Autoscales so the waveform always fits the screen"""
 
     # Initial time axis adjustment
-    testf = f # a test frequency, testf, is used to work out the initial settings. testf is set to the first value of the range of frequencies used for the frequency response
-    timespan = 1/testf*3 # initialise time span to three periods of the signal of frequency testf
+    f # a test frequency, testf, is used to work out the initial settings. testf is set to the first value of the range of frequencies used for the frequency response
+    timespan = 1/f*3 # initialise time span to three periods of the signal of frequency testf
     command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
     g = 10  # initial gain estimate, this will set the vertical range to twice the first pk-pk voltage
     
@@ -141,12 +151,12 @@ def auto_adjust(v, f, chan, meas_chan): # FIX
     v_meas = read_measurement(meas_chan)
             
     # Adjusts voltage axis
-    while v_meas > (0.85*g*v):   # if the pk-pk output voltage occupies more than 85% of the screen, change volts/div
+    while v_meas > (0.85*g*v):   # if the pk-pk output voltage occupies more than 85# of the screen, change volts/div
         g = 1.5*g
         command(oscope, f"channel{chan}:SCALE {g*v/10}")
         v_meas = read_measurement(meas_chan)
             
-        if v_meas < 0.3*g*v:  # if the pk-pk output voltage occupies less than 30% of the screen, change volts/div
+        if v_meas < 0.3*g*v:  # if the pk-pk output voltage occupies less than 30# of the screen, change volts/div
             g = g/3
             command(oscope, f"channel{chan}:SCALE {g*v/10}")
             v_meas = read_measurement(meas_chan)
@@ -179,23 +189,130 @@ def read_measurement(meas_chan, meas_type=0):
     return value
 
 
-def acquire_waveform(chan, method="ascii"):
-    """Acquires the waveform either using read_ascii_values or by reading each byte individually. Set method to 'ascii' or 'byte'"""
-    command(oscope, f"CHAN{chan}:DATA?")
+def acquire_waveform(chan):
+    """Acquires the waveform by reading each byte individually."""
 
-    if method == "ascii":
-        waveform = oscope.read_ascii_values()
-    elif method == "byte":
-        byte_count = 0
-        while byte_count != oscope.baud_rate:
-            data_list = []
-            data = oscope.read_bytes(1)
-            data_list.append(data)
-            byte_count += 1
-            print(byte_count)
-        waveform = data_list
+    command(oscope, 'TIM:SCAL 2E-4')
+    command(oscope, f'CHAN{chan}:RANG 15')
+    command(oscope, 'FORM BYTE')
+    command(oscope, f'CHAN{chan}:DATA:POIN DMAX:')
+    #command(oscope, 'SING*;OPC?')
+    command(oscope, f'CHAN{chan}:DATA:HEAD?')
+    header = str(oscope.read()).split(',')
+    X_start = header[0]
+    X_stop = header[1]
+    num_samples = header[2]
+    val_per_samp = header[3]
+    command(oscope, f'CHAN{chan}:DATA:YRES?')
+    y_res = float(oscope.read())
+    command(oscope, f'CHAN{chan}:DATA:XOR?')
+    x_or = float(oscope.read())
+    command(oscope, f'CHAN{chan}:DATA:XINC?')
+    x_inc = float(oscope.read())
+    command(oscope, 'FORM WORD')
+    time.sleep(0.1)
+    command(oscope, f'CHAN{chan}:DATA:YOR?')
+    time.sleep(0.1)
+    y_or = float(oscope.read())
+    command(oscope, f'CHAN{chan}:DATA:YINC?')
+    y_inc = float(oscope.read())
+    print('y_res', y_res)
+    print('y_or' ,y_or)
+    print('x_or', x_or) # same as x_start
+    print('y_inc', y_inc)
+    print('x_inc', x_inc)
+    print(header)
 
-    return waveform
+    command(oscope, 'FORM:BORD LSBF') # each data point will become a word (i.e. two bytes), the Least Significant Byte (LSB) will come first
+    command(oscope,f':DIGitize CHANnel{chan}') # digitise channel, see Appendix (page 89)
+    command(oscope, f'CHAN{chan}:DATA?') # request channel data
+    bin_size = oscope.baud_rate
+    iterations = int(num_samples)/bin_size
+    iterations = ceil(iterations)
+
+    data = []
+    print('here')
+    count = 0
+    while count < int(num_samples):
+        temp_data = oscope.read_bytes(2)
+        data.append(temp_data)
+        count+=1
+        print(count)
+
+    #print(data)
+    #for _ in range(iterations-1):
+    #    temp_data = oscope.read_bytes(bin_size/2)
+    #    print(temp_data)
+    #    data.append(temp_data)
+    print('Length=', len(data))
+    data_join = b''.join(data)
+    ascii_code = []
+    for b in data_join:
+    #     print(b)
+         ascii_code.append(chr(b))
+    ascii_code_join = ''.join(ascii_code).split(',')
+    ascii_code_join_int = []
+    #print(ascii_code_join)
+    for i in ascii_code_join:
+         ascii_code_join_int.append(float(i))
+    print(ascii_code_join_int)
+    # print(ascii_code_join_int[0]* float(y_inc) + float(y_or))
+
+    no_of_data_array_elements= len(ascii_code_join_int)
+
+    time_values = []
+    voltages = []
+    for i in range(no_of_data_array_elements):
+        time_values.append((i * float(x_inc)) + float(x_or)) # recreates a vector for the X values using the ‘x_or’ and ‘x_inc’ values acquired from the scope
+        voltages.append((ascii_code_join_int[i] * float(y_inc)) + float(y_or)); # recreates the Y values using the ‘y_or’ and ‘y_inc’ values acquired from the scope
+
+    #print(time_values)
+    #print(voltages)
+    print('success')
+
+
+
+    # if method == "byte":
+    #     data = oscope.read_bytes(1)
+    #     while data != '#':
+    #         data = oscope.read_bytes(1)
+    #         print(data)
+    #     header_len_ascii=oscope.read_bytes(1)
+    #     header_len = int(chr(header_len_ascii))
+    #     acquired_length = oscope.read_bytes(header_len)
+    #     L=int(chr(acquired_length))
+    #     print('H_L', header_len)
+    #     print ('A_L=',acquired_length)
+    #     #bin_size=obj2.InputBufferSize;
+    #     #iterations=L/bin_size; % calculate number of bins/iterations
+    # #iter_no=ceil(iterations) % round iterations to the next integer
+    # #w=1
+    # #for k=1:(iter_no-1) % data acquisition loop
+    # #temp=fread(obj2,bin_size/2,'int16'); % read the data in the current bin. We are
+    # #% reading bin_size/2 elements of type ‘int16’(word). Since
+    # #% each ‘int16’ is two bytes long, we are actually reading bin_size bytes.
+    # #a(w:w-1+bin_size/2)=temp; % add the elements to the Y data vector, 'a'
+    # #w=w+bin_size/2; % increment index for vector 'a'
+    # #end
+    # #no_of_data_array_elements= max(size(a));
+
+    # #for i=1:1:no_of_data_array_elements
+    # #% See Appendix, page 89
+    # #time_value(i) =(i * xinc) + xorg; % recreates a vector for the Xvalues
+    # #% using the ‘xorg’ and ‘xinc’ values acquired from the scope
+    # #volts(i) = ( (a(i) * yinc_num ) + yorg_num ); %recreates a vector
+    # #% for the Yvalues
+
+    #elif method == "byte":
+    #    byte_count = 0
+    #    data_list = []
+    #    while byte_count != oscope.baud_rate:
+    #        data = oscope.read_bytes(1)
+    #        data_list.append(data)
+    #        byte_count += 1
+    #    waveform = data_list
+
+    return time_values, voltages
 
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
@@ -228,31 +345,50 @@ oscope_default_settings(1)
 oscope_default_settings(2)
 
 # Set up measurement channels
-measurement_channel_setup(1, 'PEAK', 1)
-measurement_channel_setup(2, 'PEAK', 2)
-measurement_channel_setup(3, 'PHASe', 1, 2)
+#measurement_channel_setup(1, 'PEAK', 1)
+#measurement_channel_setup(2, 'PEAK', 2)
+#measurement_channel_setup(3, 'PHASe', 1, 2)
 
 # Set parameters
-Vin_PP = [0.4, 1, 1.5]
-Offset = 0.0
-Frequencies = [10,100,1000,10000]
+#Vin_PP = [0.4, 1, 1.5]
+#Offset = 0.0
+#Frequencies = [10,100,1000,10000]
 
 # Initiate result variables
-v_in_list = []
-v_out_list = []
-phase_list = []
-results_dict = {} 
+#v_in_list = []
+#v_out_list = []
+#phase_list = []
+#results_dict = {} 
 
-oscope_set_siggen(0.4,1000)
+
+
+
+# Set up signal generator
+oscope_set_siggen(1,1000)
+#time.sleep(10)
 time.sleep(3)
-values = acquire_waveform(1)
-print(values)
-list = []
-for i in range(values):
-    list.append(i)
+
+# Set up trigger levels
+oscope_trigger_settings(1, 0)
+time.sleep(0.1)
+
+# Acquire waveform
+times, voltages = acquire_waveform(1)
+#print (times)
+#print(voltages)
+print(len(times), len(voltages))
 
 
-print(acquire_waveform(1, 'byte'))
+#yrange_cmd=['channel3:RANGe ' num2str(3*vinpp)];
+#command(oscope, f'CHAN1:RANG 500);
+#command(oscope,':TRIGger:EDGE:SOURce channel3');
+#command(oscope,'TRIGger:MODE EDGE');                 
+#command(oscope,'TRIGger:SLOpe POSitive');
+#command(oscope,'TRIGger:LEVel 0');
+#command(oscope,['TIMEBASE:RANGE ' num2str(timespan)]);
+
+
+
 # for v in Vin_PP:
 #     for f in Frequencies:
 #         oscope_set_siggen(v,f)
