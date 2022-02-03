@@ -9,7 +9,7 @@
 from math import ceil
 import pyvisa
 import time
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 rm = pyvisa.ResourceManager()
 
@@ -193,27 +193,43 @@ def acquire_waveform(chan):
     """Acquires the waveform by reading each byte individually."""
 
     command(oscope, 'TIM:SCAL 2E-4')
-    command(oscope, f'CHAN{chan}:RANG 15')
-    command(oscope, 'FORM BYTE')
-    command(oscope, f'CHAN{chan}:DATA:POIN DMAX:')
-    #command(oscope, 'SING*;OPC?')
+    command(oscope, f'CHAN{chan}:RANG 2')
+    command(oscope, 'FORM ASC')
+    print("hi")
+    #command(oscope, 'FORM BYTE')
+    
+    #command(oscope, 'ACQuire:POINts:32')
+    time.sleep(0.1)
+    print('No. Datap1:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
+    #print('Acqp:',read(oscope, 'ACQuire:POINts?'))
+    command(oscope, 'STOP')
+    time.sleep(0.5)
+    command(oscope, f'CHAN{chan}:DATA:POIN 300:')
+    time.sleep(0.5)
+    print('No. Datap2:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
+    command(oscope, 'SING*;OPC?')
+    print('No. Datap3:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
     command(oscope, f'CHAN{chan}:DATA:HEAD?')
     header = str(oscope.read()).split(',')
+    print('No. Datap4:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
     X_start = header[0]
     X_stop = header[1]
     num_samples = header[2]
     val_per_samp = header[3]
+    #command(oscope, 'FORM UINT,8;FORM?')
+    command(oscope, 'OPC?')
     command(oscope, f'CHAN{chan}:DATA:YRES?')
     y_res = float(oscope.read())
     command(oscope, f'CHAN{chan}:DATA:XOR?')
     x_or = float(oscope.read())
     command(oscope, f'CHAN{chan}:DATA:XINC?')
     x_inc = float(oscope.read())
-    command(oscope, 'FORM WORD')
-    time.sleep(0.1)
+    #command(oscope, 'FORM WORD')
+    #time.sleep(0.1)
     command(oscope, f'CHAN{chan}:DATA:YOR?')
-    time.sleep(0.1)
+    #time.sleep(0.1)
     y_or = float(oscope.read())
+    #command(oscope, 'FORM UINT,8;FORM?')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     y_inc = float(oscope.read())
     print('y_res', y_res)
@@ -223,48 +239,60 @@ def acquire_waveform(chan):
     print('x_inc', x_inc)
     print(header)
 
-    command(oscope, 'FORM:BORD LSBF') # each data point will become a word (i.e. two bytes), the Least Significant Byte (LSB) will come first
-    command(oscope,f':DIGitize CHANnel{chan}') # digitise channel, see Appendix (page 89)
-    command(oscope, f'CHAN{chan}:DATA?') # request channel data
-    bin_size = oscope.baud_rate
-    iterations = int(num_samples)/bin_size
-    iterations = ceil(iterations)
+    #command(oscope, 'FORM:BORD LSBF') # each data point will become a word (i.e. two bytes), the Least Significant Byte (LSB) will come first
+    #command(oscope,f':DIGitize CHANnel{chan}') # digitise channel, see Appendix (page 89)
+    #command(oscope, f'CHAN{chan}:DATA?') # request channel data
+    #bin_size = oscope.baud_rate
+    #iterations = int(num_samples)/bin_size
+    #iterations = ceil(iterations)
 
-    data = []
-    print('here')
-    count = 0
-    while count < int(num_samples):
-        temp_data = oscope.read_bytes(2)
-        data.append(temp_data)
-        count+=1
-        print(count)
+    print('No. Datap5:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
+    waveformASCII = oscope.query_ascii_values('FORM ASC;:CHAN1:DATA?')
+    form = oscope.query('FORM?')
+    print(form)
+    print('No. Datap6:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
+
+    #print(waveformASCII)
+    #data=oscope.read_bytes(1)
+    #print(data)
+    #data = []
+    #print('here')
+    #count = 0
+    #while count < int(num_samples):
+    #    temp_data = oscope.read_bytes(2)
+    #    data.append(temp_data)
+    #    count+=1
+    #    print(count)
 
     #print(data)
     #for _ in range(iterations-1):
     #    temp_data = oscope.read_bytes(bin_size/2)
     #    print(temp_data)
     #    data.append(temp_data)
-    print('Length=', len(data))
-    data_join = b''.join(data)
-    ascii_code = []
-    for b in data_join:
+    #print('Length=', len(data))
+    #data_join = b''.join(data)
+    #ascii_code = []
+    #for b in data_join:
     #     print(b)
-         ascii_code.append(chr(b))
-    ascii_code_join = ''.join(ascii_code).split(',')
-    ascii_code_join_int = []
+    #     ascii_code.append(chr(b))
+    #ascii_code_join = ''.join(ascii_code).split(',')
+    #ascii_code_join_int = []
     #print(ascii_code_join)
-    for i in ascii_code_join:
-         ascii_code_join_int.append(float(i))
-    print(ascii_code_join_int)
+    #for i in ascii_code_join:
+    #     ascii_code_join_int.append(float(i))
+    #print(ascii_code_join_int)
     # print(ascii_code_join_int[0]* float(y_inc) + float(y_or))
 
-    no_of_data_array_elements= len(ascii_code_join_int)
-
+    no_of_data_array_elements= len(waveformASCII)
+    with open('waveform.txt','w') as f:
+        f.write('waveform:\n')
     time_values = []
     voltages = []
     for i in range(no_of_data_array_elements):
         time_values.append((i * float(x_inc)) + float(x_or)) # recreates a vector for the X values using the ‘x_or’ and ‘x_inc’ values acquired from the scope
-        voltages.append((ascii_code_join_int[i] * float(y_inc)) + float(y_or)); # recreates the Y values using the ‘y_or’ and ‘y_inc’ values acquired from the scope
+        voltages.append((waveformASCII[i] * float(y_inc)) + float(y_or)); # recreates the Y values using the ‘y_or’ and ‘y_inc’ values acquired from the scope
+        #with open('waveform.txt','a') as f:
+        #    f.write(f'Time: {time_values[-1]}, Voltage: {voltages[-1]}\n')
 
     #print(time_values)
     #print(voltages)
@@ -342,7 +370,7 @@ for instrument in instruments:
 # Set up oscilloscope
 oscope_preset()
 oscope_default_settings(1)
-oscope_default_settings(2)
+#oscope_default_settings(2)
 
 # Set up measurement channels
 #measurement_channel_setup(1, 'PEAK', 1)
@@ -376,9 +404,8 @@ time.sleep(0.1)
 times, voltages = acquire_waveform(1)
 #print (times)
 #print(voltages)
+print(voltages[300])
 print(len(times), len(voltages))
-plt.plot(times, voltages)
-plt.show()
 
 #yrange_cmd=['channel3:RANGe ' num2str(3*vinpp)];
 #command(oscope, f'CHAN1:RANG 500);
