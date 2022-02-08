@@ -398,12 +398,12 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     iterations = int(num_samples)/bin_size # calculate number of bins/iterations
     iter_no=ceil(iterations); # round iterations to the next integer
 
-    headerdata= oscope.read_bytes(4,16) #'int16')# removes header
+    headerdata= oscope.read_bytes(4,numpy.int16) #'int16')# removes header
 
     waveform_data = []
     # DATA ACQUISITION LOOP
     for k in range(iter_no-1):
-        temp_data= oscope.read_bytes(int(bin_size/2),16) #'int16') # read the data in the current bin. We are
+        temp_data= oscope.read_bytes(int(bin_size/2),numpy.int16) #'int16') # read the data in the current bin. We are
         #  reading bin_size/2 elements of type ‘int16’(word).
         #  each ‘int16’ is two bytes long, so bin_size bytes are read.
         print(temp_data)
