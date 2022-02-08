@@ -9,7 +9,7 @@
 from math import ceil
 import pyvisa
 import time
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 rm = pyvisa.ResourceManager()
 
@@ -74,7 +74,7 @@ def oscope_preset():
     "Resets the oscilloscope"
     command(oscope, '*DCL') # *DCL clears status registers
     command(oscope, '*CLS') # *CLS clears output queue
-    command(oscope, '*RST')
+    command(oscope, '*RST') # *RST resets the scope
 
 
 def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0'):
@@ -193,43 +193,27 @@ def acquire_waveform(chan):
     """Acquires the waveform by reading each byte individually."""
 
     command(oscope, 'TIM:SCAL 2E-4')
-    command(oscope, f'CHAN{chan}:RANG 2')
-    command(oscope, 'FORM ASC')
-    print("hi")
-    #command(oscope, 'FORM BYTE')
-    
-    #command(oscope, 'ACQuire:POINts:32')
-    time.sleep(0.1)
-    print('No. Datap1:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
-    #print('Acqp:',read(oscope, 'ACQuire:POINts?'))
-    command(oscope, 'STOP')
-    time.sleep(0.5)
-    command(oscope, f'CHAN{chan}:DATA:POIN 300:')
-    time.sleep(0.5)
-    print('No. Datap2:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
-    command(oscope, 'SING*;OPC?')
-    print('No. Datap3:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
+    command(oscope, f'CHAN{chan}:RANG 15')
+    command(oscope, 'FORM BYTE')
+    command(oscope, f'CHAN{chan}:DATA:POIN DMAX:')
+    #command(oscope, 'SING*;OPC?')
     command(oscope, f'CHAN{chan}:DATA:HEAD?')
     header = str(oscope.read()).split(',')
-    print('No. Datap4:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
     X_start = header[0]
     X_stop = header[1]
     num_samples = header[2]
     val_per_samp = header[3]
-    #command(oscope, 'FORM UINT,8;FORM?')
-    command(oscope, 'OPC?')
     command(oscope, f'CHAN{chan}:DATA:YRES?')
     y_res = float(oscope.read())
     command(oscope, f'CHAN{chan}:DATA:XOR?')
     x_or = float(oscope.read())
     command(oscope, f'CHAN{chan}:DATA:XINC?')
     x_inc = float(oscope.read())
-    #command(oscope, 'FORM WORD')
-    #time.sleep(0.1)
+    command(oscope, 'FORM WORD')
+    time.sleep(0.1)
     command(oscope, f'CHAN{chan}:DATA:YOR?')
-    #time.sleep(0.1)
+    time.sleep(0.1)
     y_or = float(oscope.read())
-    #command(oscope, 'FORM UINT,8;FORM?')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     y_inc = float(oscope.read())
     print('y_res', y_res)
@@ -239,60 +223,48 @@ def acquire_waveform(chan):
     print('x_inc', x_inc)
     print(header)
 
-    #command(oscope, 'FORM:BORD LSBF') # each data point will become a word (i.e. two bytes), the Least Significant Byte (LSB) will come first
-    #command(oscope,f':DIGitize CHANnel{chan}') # digitise channel, see Appendix (page 89)
-    #command(oscope, f'CHAN{chan}:DATA?') # request channel data
-    #bin_size = oscope.baud_rate
-    #iterations = int(num_samples)/bin_size
-    #iterations = ceil(iterations)
+    command(oscope, 'FORM:BORD LSBF') # each data point will become a word (i.e. two bytes), the Least Significant Byte (LSB) will come first
+    command(oscope, f':DIGitize CHANnel{chan}') # digitise channel, see Appendix (page 89)
+    command(oscope, f'CHAN{chan}:DATA?') # request channel data
+    bin_size = oscope.baud_rate
+    iterations = int(num_samples)/bin_size
+    iterations = ceil(iterations)
 
-    print('No. Datap5:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
-    waveformASCII = oscope.query_ascii_values('FORM ASC;:CHAN1:DATA?')
-    form = oscope.query('FORM?')
-    print(form)
-    print('No. Datap6:',read(oscope, f'CHAN{chan}:DATA:POIN?'))
-
-    #print(waveformASCII)
-    #data=oscope.read_bytes(1)
-    #print(data)
-    #data = []
-    #print('here')
-    #count = 0
-    #while count < int(num_samples):
-    #    temp_data = oscope.read_bytes(2)
-    #    data.append(temp_data)
-    #    count+=1
-    #    print(count)
+    data = []
+    print('here')
+    count = 0
+    while count < int(num_samples):
+        temp_data = oscope.read_bytes(1)
+        data.append(temp_data)
+        count+=1
+        print(count)
 
     #print(data)
     #for _ in range(iterations-1):
     #    temp_data = oscope.read_bytes(bin_size/2)
     #    print(temp_data)
     #    data.append(temp_data)
-    #print('Length=', len(data))
-    #data_join = b''.join(data)
-    #ascii_code = []
-    #for b in data_join:
+    print('Length=', len(data))
+    data_join = b''.join(data)
+    ascii_code = []
+    for b in data_join:
     #     print(b)
-    #     ascii_code.append(chr(b))
-    #ascii_code_join = ''.join(ascii_code).split(',')
-    #ascii_code_join_int = []
+         ascii_code.append(chr(b))
+    ascii_code_join = ''.join(ascii_code).split(',')
+    ascii_code_join_int = []
     #print(ascii_code_join)
-    #for i in ascii_code_join:
-    #     ascii_code_join_int.append(float(i))
-    #print(ascii_code_join_int)
+    for i in ascii_code_join:
+         ascii_code_join_int.append(float(i))
+    print(ascii_code_join_int)
     # print(ascii_code_join_int[0]* float(y_inc) + float(y_or))
 
-    no_of_data_array_elements= len(waveformASCII)
-    with open('waveform.txt','w') as f:
-        f.write('waveform:\n')
+    no_of_data_array_elements= len(ascii_code_join_int)
+
     time_values = []
     voltages = []
     for i in range(no_of_data_array_elements):
         time_values.append((i * float(x_inc)) + float(x_or)) # recreates a vector for the X values using the ‘x_or’ and ‘x_inc’ values acquired from the scope
-        voltages.append((waveformASCII[i] * float(y_inc)) + float(y_or)); # recreates the Y values using the ‘y_or’ and ‘y_inc’ values acquired from the scope
-        #with open('waveform.txt','a') as f:
-        #    f.write(f'Time: {time_values[-1]}, Voltage: {voltages[-1]}\n')
+        voltages.append((ascii_code_join_int[i] * float(y_inc)) + float(y_or)); # recreates the Y values using the ‘y_or’ and ‘y_inc’ values acquired from the scope
 
     #print(time_values)
     #print(voltages)
@@ -312,24 +284,24 @@ def acquire_waveform(chan):
     #     print('H_L', header_len)
     #     print ('A_L=',acquired_length)
     #     #bin_size=obj2.InputBufferSize;
-    #     #iterations=L/bin_size; % calculate number of bins/iterations
-    # #iter_no=ceil(iterations) % round iterations to the next integer
+    #     #iterations=L/bin_size; # calculate number of bins/iterations
+    # #iter_no=ceil(iterations) # round iterations to the next integer
     # #w=1
-    # #for k=1:(iter_no-1) % data acquisition loop
-    # #temp=fread(obj2,bin_size/2,'int16'); % read the data in the current bin. We are
-    # #% reading bin_size/2 elements of type ‘int16’(word). Since
-    # #% each ‘int16’ is two bytes long, we are actually reading bin_size bytes.
-    # #a(w:w-1+bin_size/2)=temp; % add the elements to the Y data vector, 'a'
-    # #w=w+bin_size/2; % increment index for vector 'a'
+    # #for k=1:(iter_no-1) # data acquisition loop
+    # #temp=fread(obj2,bin_size/2,'int16'); # read the data in the current bin. We are
+    # ## reading bin_size/2 elements of type ‘int16’(word). Since
+    # ## each ‘int16’ is two bytes long, we are actually reading bin_size bytes.
+    # #a(w:w-1+bin_size/2)=temp; # add the elements to the Y data vector, 'a'
+    # #w=w+bin_size/2; # increment index for vector 'a'
     # #end
     # #no_of_data_array_elements= max(size(a));
 
     # #for i=1:1:no_of_data_array_elements
-    # #% See Appendix, page 89
-    # #time_value(i) =(i * xinc) + xorg; % recreates a vector for the Xvalues
-    # #% using the ‘xorg’ and ‘xinc’ values acquired from the scope
-    # #volts(i) = ( (a(i) * yinc_num ) + yorg_num ); %recreates a vector
-    # #% for the Yvalues
+    # ## See Appendix, page 89
+    # #time_value(i) =(i * xinc) + xorg; # recreates a vector for the Xvalues
+    # ## using the ‘xorg’ and ‘xinc’ values acquired from the scope
+    # #volts(i) = ( (a(i) * yinc_num ) + yorg_num ); #recreates a vector
+    # ## for the Yvalues
 
     #elif method == "byte":
     #    byte_count = 0
@@ -341,6 +313,112 @@ def acquire_waveform(chan):
     #    waveform = data_list
 
     return time_values, voltages
+
+
+def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
+    """Acquire waveform."""
+
+    vin=vinpp/2 # vinpp is the pk-pk amplitude
+    timespan=1/(frequency*2)  # initialise time span to two periods of the signal of frequency
+
+    ## OSCILLOSCOPE INITIAL SET-UP 
+
+    # SET BUFFER SIZE
+    # oscope.InputBufferSize=512
+    # SET UP CHANNEL
+    command(oscope, 'CHAN1:TYPE HRES')
+    command(oscope, 'FORM UINT,16;FORM?')
+    test_form = oscope.read()
+    command(oscope, f'TIM:SCAL {timespan}')
+    command(oscope, f'CHAN1:RANG {vinpp*1.5}')
+
+    # SET UP INTERNAL SIGNAL GENERATOR
+    command(oscope,':WGEN:OUTPut ON')
+    command(oscope,f':WGEN:VOLTage {vinpp}')
+    command(oscope,f':WGEN:VOLTage:OFFset {offset}')
+    command(oscope,f':WGEN:FREQuency {frequency}')
+
+    # SET UP TRIGGER
+    command(oscope, f':TRIGger:EDGE:SOURce CHANnel{chan}')
+    command(oscope,'TRIGger:MODE EDGE')             
+    command(oscope,'TRIGger:SLOpe POSitive')
+    command(oscope,'TRIGger:LEVel 0') 
+
+    # RESET SCOPE
+    command(oscope, '*RST')
+
+    # READ HEADER
+    command(oscope, f'CHAN{chan}:DATA:HEAD?')
+    header = str(oscope.read()).split(',')
+    X_start = header[0]
+    X_stop = header[1]
+    num_samples = header[2]
+    val_per_samp = header[3]
+    command(oscope, 'SING;*OPC?')
+    test_opc = oscope.read()
+    command(oscope, f'CHAN{chan}:DATA:YRES?')
+    y_res = float(oscope.read())
+    command(oscope, f'CHAN{chan}:DATA:XOR?')
+    x_or = float(oscope.read())
+    command(oscope, f'CHAN{chan}:DATA:XINC?')
+    x_inc = float(oscope.read())
+    command(oscope, f'CHAN{chan}:DATA:YOR?')
+    y_or = float(oscope.read())
+    command(oscope, 'FORM UINT,16;FORM?')
+    test_form = oscope.read()
+    command(oscope, 'FORM:BORD LSBF')
+    command(oscope, f'CHAN{chan}:DATA:YINC?')
+    y_inc = float(oscope.read())
+
+    # READ DATA CONVERSION INFO
+    command(oscope, f'CHAN{chan}:DATA:POIN DMAX')
+    command(oscope, f'CHAN{chan}:DATA:POIN?')
+    test_d_points = oscope.read()
+    #command(oscope, 'SING;*OPC?')
+    test_opc = oscope.read()
+    command(oscope, f'CHAN{chan}:DATA:YRES?')
+    test_yres = oscope.read()
+    test_yres = chr(test_yres)
+    command(oscope, f'CHAN{chan}:DATA:YOR?')
+    test_yor = oscope.read()
+    command(oscope, f'CHAN{chan}:DATA:XOR?')
+    test_xor = oscope.read()
+    command(oscope, f'CHAN{chan}:DATA:XINC?')
+    test_xinc = oscope.read()
+    command(oscope, 'FORM UINT,16;FORM?')
+    test_form = oscope.read()
+    command(oscope, 'FORM:BORD LSBF')
+    command(oscope, f'CHAN{chan}:DATA:YINC?')
+    test_yinc = oscope.read()
+    time.sleep(1)
+    command(oscope, f'CHAN{chan}:DATA?')
+    bin_size = oscope.InputBufferSize # determine data bin size
+    iterations = num_samples/bin_size # calculate number of bins/iterations
+    iter_no=ceil(iterations); # round iterations to the next integer
+
+    headerdata= oscope.read_bytes(4) #'int16')# removes header
+
+    # DATA ACQUISITION LOOP
+    for k in range(iter_no-5):
+        temp_data= oscope.read_bytes(bin_size/2) #'int16') # read the data in the current bin. We are
+        #  reading bin_size/2 elements of type ‘int16’(word).
+        #  each ‘int16’ is two bytes long, so bin_size bytes are read.
+        waveform_data = waveform_data + temp_data # add the elements to the Y data vector, 'a'
+    no_of_data_array_elements= len(waveform_data)
+
+    # CONVERTS WAVEFORM DATA TO VALUES
+    for i in range(no_of_data_array_elements): 
+        test_times.append(i*test_xinc+test_xor)
+        if waveform_data[i]<0:
+            test_voltages.append((-waveform_data[i]*test_yinc+test_yor)*-1)
+        else:
+            test_voltages.append(waveform_data[i]*test_yinc+test_yor)
+
+    # PLOT WAVEFORM
+    plt.plot(test_times,test_voltages)
+
+    # CLOSE INSTRUMENT
+    oscope.close()
 
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
@@ -378,9 +456,9 @@ oscope_default_settings(1)
 #measurement_channel_setup(3, 'PHASe', 1, 2)
 
 # Set parameters
-#Vin_PP = [0.4, 1, 1.5]
-#Offset = 0.0
-#Frequencies = [10,100,1000,10000]
+Vin_PP = [0.4, 1, 1.5]
+Offset = 0.0
+Frequencies = [10,100,1000,10000]
 
 # Initiate result variables
 #v_in_list = []
@@ -389,23 +467,20 @@ oscope_default_settings(1)
 #results_dict = {} 
 
 
-
-
 # Set up signal generator
-oscope_set_siggen(1,1000)
-#time.sleep(10)
-time.sleep(3)
+oscope_set_siggen(Vin_PP[1],Frequencies[2])
+time.sleep(0.5)
 
 # Set up trigger levels
 oscope_trigger_settings(1, 0)
 time.sleep(0.1)
 
 # Acquire waveform
-times, voltages = acquire_waveform(1)
+times, voltages = acquire_waveform_W(1,Vin_PP[1],Frequencies[2])
 #print (times)
 #print(voltages)
-print(voltages[300])
 print(len(times), len(voltages))
+
 
 #yrange_cmd=['channel3:RANGe ' num2str(3*vinpp)];
 #command(oscope, f'CHAN1:RANG 500);
