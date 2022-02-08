@@ -9,6 +9,7 @@
 from math import ceil
 import pyvisa
 import time
+import numpy
 import matplotlib.pyplot as plt
 
 rm = pyvisa.ResourceManager()
@@ -48,7 +49,7 @@ def connect_instrument(instrument_string):
         instrument = rm.open_resource(instrument_string)
         instrument.read_termination = '\n'  # Define the last line of an input to be a paragraph break
         instrument.write_termination = '\n'  # Set the output (to the instrument) to be end with a paragraph break
-        instrument.baud_rate = 1000  # Set buffer size to be 1000
+        instrument.baud_rate = 512  # Set buffer size to be 1000
         instrument.visa_timeout = 5000  # Timeout for VISA Read Operations
         instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
         instrument.instrument_status_checking = True  # Error check after each command
@@ -324,13 +325,13 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     ## OSCILLOSCOPE INITIAL SET-UP 
 
     # SET BUFFER SIZE
-    # oscope.InputBufferSize=512
+
     # SET UP CHANNEL
     command(oscope, 'CHAN1:TYPE HRES')
     command(oscope, 'FORM UINT,16;FORM?')
-    test_form = oscope.read()
+    form = oscope.read()
     command(oscope, f'TIM:SCAL {timespan}')
-    command(oscope, f'CHAN1:RANG {vinpp*1.5}')
+    command(oscope, f'CHAN1:RANG {vinpp*10.5}')
 
     # SET UP INTERNAL SIGNAL GENERATOR
     command(oscope,':WGEN:OUTPut ON')
@@ -345,7 +346,7 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     command(oscope,'TRIGger:LEVel 0') 
 
     # RESET SCOPE
-    command(oscope, '*RST')
+    #command(oscope, '*RST')
 
     # READ HEADER
     command(oscope, f'CHAN{chan}:DATA:HEAD?')
@@ -355,7 +356,8 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     num_samples = header[2]
     val_per_samp = header[3]
     command(oscope, 'SING;*OPC?')
-    test_opc = oscope.read()
+    time.sleep(1)
+    opc = oscope.read()
     command(oscope, f'CHAN{chan}:DATA:YRES?')
     y_res = float(oscope.read())
     command(oscope, f'CHAN{chan}:DATA:XOR?')
@@ -365,7 +367,7 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     command(oscope, f'CHAN{chan}:DATA:YOR?')
     y_or = float(oscope.read())
     command(oscope, 'FORM UINT,16;FORM?')
-    test_form = oscope.read()
+    form = oscope.read()
     command(oscope, 'FORM:BORD LSBF')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     y_inc = float(oscope.read())
@@ -373,52 +375,58 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     # READ DATA CONVERSION INFO
     command(oscope, f'CHAN{chan}:DATA:POIN DMAX')
     command(oscope, f'CHAN{chan}:DATA:POIN?')
-    test_d_points = oscope.read()
-    #command(oscope, 'SING;*OPC?')
-    test_opc = oscope.read()
+    d_points = oscope.read()
+    command(oscope, 'SING;*OPC?')
+    opc = oscope.read()
     command(oscope, f'CHAN{chan}:DATA:YRES?')
-    test_yres = oscope.read()
-    test_yres = chr(test_yres)
+    yres = oscope.read()
+    yres = chr(int(yres))
     command(oscope, f'CHAN{chan}:DATA:YOR?')
-    test_yor = oscope.read()
+    yor = oscope.read()
     command(oscope, f'CHAN{chan}:DATA:XOR?')
-    test_xor = oscope.read()
+    xor = oscope.read()
     command(oscope, f'CHAN{chan}:DATA:XINC?')
-    test_xinc = oscope.read()
+    xinc = oscope.read()
     command(oscope, 'FORM UINT,16;FORM?')
-    test_form = oscope.read()
+    form = oscope.read()
     command(oscope, 'FORM:BORD LSBF')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
-    test_yinc = oscope.read()
+    yinc = oscope.read()
     time.sleep(1)
     command(oscope, f'CHAN{chan}:DATA?')
-    bin_size = oscope.InputBufferSize # determine data bin size
-    iterations = num_samples/bin_size # calculate number of bins/iterations
+    bin_size = oscope.baud_rate # determine data bin size
+    iterations = int(num_samples)/bin_size # calculate number of bins/iterations
     iter_no=ceil(iterations); # round iterations to the next integer
 
-    headerdata= oscope.read_bytes(4) #'int16')# removes header
+    headerdata= oscope.read_bytes(4,16) #'int16')# removes header
 
+    waveform_data = []
     # DATA ACQUISITION LOOP
-    for k in range(iter_no-5):
-        temp_data= oscope.read_bytes(bin_size/2) #'int16') # read the data in the current bin. We are
+    for k in range(iter_no-1):
+        temp_data= oscope.read_bytes(int(bin_size/2),16) #'int16') # read the data in the current bin. We are
         #  reading bin_size/2 elements of type ‘int16’(word).
         #  each ‘int16’ is two bytes long, so bin_size bytes are read.
-        waveform_data = waveform_data + temp_data # add the elements to the Y data vector, 'a'
-    no_of_data_array_elements= len(waveform_data)
+        print(temp_data)
+        waveform_data = waveform_data + chr(temp_data) # add the elements to the Y data vector, 'a'
+    no_of_data_array_elements = len(waveform_data)
 
+    times = []
+    voltages = []
     # CONVERTS WAVEFORM DATA TO VALUES
     for i in range(no_of_data_array_elements): 
-        test_times.append(i*test_xinc+test_xor)
-        if waveform_data[i]<0:
-            test_voltages.append((-waveform_data[i]*test_yinc+test_yor)*-1)
+        times.append(i*xinc+xor)
+        if waveform_data[i] < 0:
+            voltages.append((-waveform_data[i]*yinc+yor)*-1)
         else:
-            test_voltages.append(waveform_data[i]*test_yinc+test_yor)
+            voltages.append(waveform_data[i]*yinc+yor)
 
     # PLOT WAVEFORM
-    plt.plot(test_times,test_voltages)
+    plt.plot(times,voltages)
 
     # CLOSE INSTRUMENT
     oscope.close()
+
+    return times, voltages
 
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
