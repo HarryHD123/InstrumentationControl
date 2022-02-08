@@ -9,7 +9,7 @@
 from math import ceil
 import pyvisa
 import time
-import numpy
+import numpy as np
 import matplotlib.pyplot as plt
 
 rm = pyvisa.ResourceManager()
@@ -403,7 +403,8 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     waveform_data = []
     # DATA ACQUISITION LOOP
     for k in range(iter_no-1):
-        temp_data= oscope.read_bytes(int(bin_size/2),numpy.int16) #'int16') # read the data in the current bin. We are
+        temp_data = oscope.read_bytes(int(bin_size/2) #'int16') # read the data in the current bin. We are
+        temp_data = np.array(temp_data, dtype=np.int16)
         #  reading bin_size/2 elements of type ‘int16’(word).
         #  each ‘int16’ is two bytes long, so bin_size bytes are read.
         print(temp_data)
