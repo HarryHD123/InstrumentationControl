@@ -50,7 +50,7 @@ def connect_instrument(instrument_string):
         instrument = rm.open_resource(instrument_string)
         instrument.read_termination = '\n'  # Define the last line of an input to be a paragraph break
         instrument.write_termination = '\n'  # Set the output (to the instrument) to be end with a paragraph break
-        instrument.baud_rate = 512  # Set buffer size to be 1000
+        instrument.baud_rate = 512  # Set buffer size to be 512
         instrument.visa_timeout = 5000  # Timeout for VISA Read Operations
         instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
         instrument.instrument_status_checking = True  # Error check after each command
@@ -397,48 +397,35 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     time.sleep(1)
     command(oscope, f'CHAN{chan}:DATA?')
     bin_size = oscope.baud_rate # determine data bin size
-    bin_size = 2
     iterations = int(num_samples)/bin_size # calculate number of bins/iterations
-    iter_no=ceil(iterations); # round iterations to the next integer
+    iter_no=ceil(iterations)-1; # round iterations to the next integer
+    iter_no *= 2
 
-    headerdata= oscope.read_bytes(8) #'int16')# removes header
-    #print(headerdata)
-    waveform_data = []
     # DATA ACQUISITION LOOP
+    headerdata= oscope.read_bytes(8) # removes header
+    waveform_data = np.array([])
+    
     for k in range(iter_no-1):
-        #temp_data = oscope.read()
-        temp_data = oscope.read_bytes(2)#int(bin_size/2)) #'int16') # read the data in the current bin. We are
-        temp_data = int.from_bytes(temp_data, 'little')
-        #temp_data.split(b'\n')
-        #data_array = array.array("H")
-        #data_array.append(temp_data)
-        #data_array.fromfile(oscope.read_bytes(int(bin_size/2)), int(bin_size/2))#int(bin_size/2))
-        #np.int16)
-        #print(data_array)
-        #a = array.array("L")  # L is the typecode for uint32
-        #a.fromfile(f, 3)
-        # int.from_bytes()
-        #temp_data = np.array(temp_data, dtype=np.int16)
+        temp_data = oscope.read_bytes(int(bin_size)) #'int16') # read the data in the current bin. We are
+        mv = memoryview(temp_data).cast('H')
+        bin_data = np.array(mv)
+        if k == 0:
+            print("BIN:", bin_data)
+        waveform_data = np.append(waveform_data, bin_data)
         #  reading bin_size/2 elements of type ‘int16’(word).
         #  each ‘int16’ is two bytes long, so bin_size bytes are read.
         #temp_data = int.from_bytes(temp_data, 'big')
-        #print(temp_data)
-        waveform_data.append(temp_data) # add the elements to the Y data vector, 'a'
-    no_of_data_array_elements = len(waveform_data)
-    print(no_of_data_array_elements)
-    times = []
-    voltages = []
+        # add the elements to the data vector, 'waveform_data'
+    
     # CONVERTS WAVEFORM DATA TO VALUES
-    for i in range(no_of_data_array_elements): 
-        times.append(i*xinc+xor)
-        if waveform_data[i] < 0:
-            voltages.append((-waveform_data[i]*yinc+yor)*-1)
-        else:
-            voltages.append(waveform_data[i]*yinc+yor)
+    no_of_data_array_elements = len(waveform_data)
+    times = [i * float(xinc) + float(xor) for i in range(no_of_data_array_elements)]
+    voltages = waveform_data * float(yinc) + float(yor) 
 
     # PLOT WAVEFORM
     plt.plot(times,voltages)
     plt.show()
+
     # CLOSE INSTRUMENT
     oscope.close()
 
