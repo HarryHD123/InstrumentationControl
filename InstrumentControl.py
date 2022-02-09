@@ -9,6 +9,7 @@
 from math import ceil
 import pyvisa
 import time
+import array
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -389,28 +390,42 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     xinc = oscope.read()
     command(oscope, 'FORM UINT,16;FORM?')
     form = oscope.read()
+    print(form)
     command(oscope, 'FORM:BORD LSBF')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     yinc = oscope.read()
     time.sleep(1)
     command(oscope, f'CHAN{chan}:DATA?')
     bin_size = oscope.baud_rate # determine data bin size
+    bin_size = 2
     iterations = int(num_samples)/bin_size # calculate number of bins/iterations
     iter_no=ceil(iterations); # round iterations to the next integer
 
-    headerdata= oscope.read_bytes(4,numpy.int16) #'int16')# removes header
-
+    headerdata= oscope.read_bytes(8) #'int16')# removes header
+    #print(headerdata)
     waveform_data = []
     # DATA ACQUISITION LOOP
     for k in range(iter_no-1):
-        temp_data = oscope.read_bytes(int(bin_size/2) #'int16') # read the data in the current bin. We are
-        temp_data = np.array(temp_data, dtype=np.int16)
+        #temp_data = oscope.read()
+        temp_data = oscope.read_bytes(2)#int(bin_size/2)) #'int16') # read the data in the current bin. We are
+        temp_data = int.from_bytes(temp_data, 'little')
+        #temp_data.split(b'\n')
+        #data_array = array.array("H")
+        #data_array.append(temp_data)
+        #data_array.fromfile(oscope.read_bytes(int(bin_size/2)), int(bin_size/2))#int(bin_size/2))
+        #np.int16)
+        #print(data_array)
+        #a = array.array("L")  # L is the typecode for uint32
+        #a.fromfile(f, 3)
+        # int.from_bytes()
+        #temp_data = np.array(temp_data, dtype=np.int16)
         #  reading bin_size/2 elements of type ‘int16’(word).
         #  each ‘int16’ is two bytes long, so bin_size bytes are read.
-        print(temp_data)
-        waveform_data = waveform_data + chr(temp_data) # add the elements to the Y data vector, 'a'
+        #temp_data = int.from_bytes(temp_data, 'big')
+        #print(temp_data)
+        waveform_data.append(temp_data) # add the elements to the Y data vector, 'a'
     no_of_data_array_elements = len(waveform_data)
-
+    print(no_of_data_array_elements)
     times = []
     voltages = []
     # CONVERTS WAVEFORM DATA TO VALUES
@@ -423,7 +438,7 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
 
     # PLOT WAVEFORM
     plt.plot(times,voltages)
-
+    plt.show()
     # CLOSE INSTRUMENT
     oscope.close()
 
