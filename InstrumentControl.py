@@ -9,7 +9,6 @@
 from math import ceil
 import pyvisa
 import time
-import array
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -80,7 +79,7 @@ def oscope_preset():
 
 
 def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0'):
-    command(oscope, f"TIM:ACQT {acquisition_time}")  # 10ms Acquisition time
+    command(oscope, f"TIM:ACQT{acquisition_time}")  # 10ms Acquisition time
     command(oscope, f"CHAN{channel}:RANG {horizontal_range}")  # Horizontal range 5V (0.5V/div)
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset 0
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling DC 1MOhm
@@ -113,7 +112,7 @@ def oscope_coupling(channel, coupling):
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling
 
 
-def oscope_trigger_settings(channel, trigger_level):
+def oscope_trigger_settings(channel, trigger_level=0):
     """Sets Trigger Settings"""
     command(oscope, "TRIG:A:MODE AUTO")  # Trigger Auto mode in case of no signal is applied
     command(oscope, "TRIG:A:TYPE EDGE;:TRIG:A:EDGE:SLOP POS")  # Trigger type Edge Positive
@@ -191,7 +190,7 @@ def read_measurement(meas_chan, meas_type=0):
     return value
 
 
-def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
+def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     """Acquire waveform."""
 
     vin=vinpp/2 # vinpp is the pk-pk amplitude
@@ -205,21 +204,18 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     command(oscope, f'CHAN1:RANG {vinpp*10.5}')
 
     # SET UP INTERNAL SIGNAL GENERATOR
-    command(oscope,':WGEN:OUTPut ON')
-    command(oscope,f':WGEN:VOLTage {vinpp}')
-    command(oscope,f':WGEN:VOLTage:OFFset {offset}')
-    command(oscope,f':WGEN:FREQuency {frequency}')
+    # command(oscope,':WGEN:OUTPut ON')
+    # command(oscope,f':WGEN:VOLTage {vinpp}')
+    # command(oscope,f':WGEN:VOLTage:OFFset {offset}')
+    # command(oscope,f':WGEN:FREQuency {frequency}')
 
     # SET UP TRIGGER
-    command(oscope, f':TRIGger:EDGE:SOURce CHANnel{chan}')
-    command(oscope,'TRIGger:MODE EDGE')             
-    command(oscope,'TRIGger:SLOpe POSitive')
-    command(oscope,'TRIGger:LEVel 0') 
+    # command(oscope, f':TRIGger:EDGE:SOURce CHANnel{chan}')
+    # command(oscope,'TRIGger:MODE EDGE')             
+    # command(oscope,'TRIGger:SLOpe POSitive')
+    # command(oscope,'TRIGger:LEVel 0') 
 
-    # RESET SCOPE
-    #command(oscope, '*RST')
-
-    # READ HEADER
+    # READ HEADER AND CALCULATION VARIABLES
     command(oscope, f'CHAN{chan}:DATA:HEAD?')
     header = str(oscope.read()).split(',')
     X_start = header[0]
@@ -227,8 +223,11 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     num_samples = header[2]
     val_per_samp = header[3]
     command(oscope, 'SING;*OPC?')
-    time.sleep(1)
+    time.sleep(0.5)
     opc = oscope.read()
+    command(oscope, f'CHAN{chan}:DATA:POIN DMAX')
+    command(oscope, f'CHAN{chan}:DATA:POIN?')
+    d_points = oscope.read()
     command(oscope, f'CHAN{chan}:DATA:YRES?')
     y_res = float(oscope.read())
     command(oscope, f'CHAN{chan}:DATA:XOR?')
@@ -244,26 +243,24 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     y_inc = float(oscope.read())
 
     # READ DATA CONVERSION INFO
-    command(oscope, f'CHAN{chan}:DATA:POIN DMAX')
-    command(oscope, f'CHAN{chan}:DATA:POIN?')
-    d_points = oscope.read()
-    command(oscope, 'SING;*OPC?')
-    opc = oscope.read()
-    command(oscope, f'CHAN{chan}:DATA:YRES?')
-    yres = oscope.read()
-    yres = chr(int(yres))
-    command(oscope, f'CHAN{chan}:DATA:YOR?')
-    yor = oscope.read()
-    command(oscope, f'CHAN{chan}:DATA:XOR?')
-    xor = oscope.read()
-    command(oscope, f'CHAN{chan}:DATA:XINC?')
-    xinc = oscope.read()
-    command(oscope, 'FORM UINT,16;FORM?')
-    form = oscope.read()
-    print(form)
-    command(oscope, 'FORM:BORD LSBF')
-    command(oscope, f'CHAN{chan}:DATA:YINC?')
-    yinc = oscope.read()
+
+    # command(oscope, 'SING;*OPC?')
+    # opc = oscope.read()
+    # command(oscope, f'CHAN{chan}:DATA:YRES?')
+    # yres = oscope.read()
+    # yres = chr(int(yres))
+    # command(oscope, f'CHAN{chan}:DATA:YOR?')
+    # yor = oscope.read()
+    # command(oscope, f'CHAN{chan}:DATA:XOR?')
+    # xor = oscope.read()
+    # command(oscope, f'CHAN{chan}:DATA:XINC?')
+    # xinc = oscope.read()
+    # command(oscope, 'FORM UINT,16;FORM?')
+    # form = oscope.read()
+    # print(form)
+    # command(oscope, 'FORM:BORD LSBF')
+    # command(oscope, f'CHAN{chan}:DATA:YINC?')
+    # yinc = oscope.read()
     time.sleep(0.5)
 
     # DATA ACQUISITION LOOP
@@ -289,8 +286,8 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     
     # CONVERTS WAVEFORM DATA TO VALUES
     no_of_data_array_elements = len(waveform_data)
-    times = [i * float(xinc) + float(xor) for i in range(no_of_data_array_elements)]
-    voltages = waveform_data * float(yinc) + float(yor) 
+    times = [i * float(x_inc) + float(x_or) for i in range(no_of_data_array_elements)]
+    voltages = waveform_data * float(y_inc) + float(y_or) 
 
     # PLOT WAVEFORM
     plt.plot(times,voltages)
@@ -357,10 +354,7 @@ oscope_trigger_settings(1, 0)
 time.sleep(0.1)
 
 # Acquire waveform
-times, voltages = acquire_waveform_W(1,Vin_PP[1],Frequencies[2])
-#print (times)
-#print(voltages)
-print(len(times), len(voltages))
+times, voltages = acquire_waveform(1,Vin_PP[1],Frequencies[2])
 
 
 #yrange_cmd=['channel3:RANGe ' num2str(3*vinpp)];
