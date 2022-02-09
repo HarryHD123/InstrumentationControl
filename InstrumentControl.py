@@ -191,141 +191,11 @@ def read_measurement(meas_chan, meas_type=0):
     return value
 
 
-def acquire_waveform(chan):
-    """Acquires the waveform by reading each byte individually."""
-
-    command(oscope, 'TIM:SCAL 2E-4')
-    command(oscope, f'CHAN{chan}:RANG 15')
-    command(oscope, 'FORM BYTE')
-    command(oscope, f'CHAN{chan}:DATA:POIN DMAX:')
-    #command(oscope, 'SING*;OPC?')
-    command(oscope, f'CHAN{chan}:DATA:HEAD?')
-    header = str(oscope.read()).split(',')
-    X_start = header[0]
-    X_stop = header[1]
-    num_samples = header[2]
-    val_per_samp = header[3]
-    command(oscope, f'CHAN{chan}:DATA:YRES?')
-    y_res = float(oscope.read())
-    command(oscope, f'CHAN{chan}:DATA:XOR?')
-    x_or = float(oscope.read())
-    command(oscope, f'CHAN{chan}:DATA:XINC?')
-    x_inc = float(oscope.read())
-    command(oscope, 'FORM WORD')
-    time.sleep(0.1)
-    command(oscope, f'CHAN{chan}:DATA:YOR?')
-    time.sleep(0.1)
-    y_or = float(oscope.read())
-    command(oscope, f'CHAN{chan}:DATA:YINC?')
-    y_inc = float(oscope.read())
-    print('y_res', y_res)
-    print('y_or' ,y_or)
-    print('x_or', x_or) # same as x_start
-    print('y_inc', y_inc)
-    print('x_inc', x_inc)
-    print(header)
-
-    command(oscope, 'FORM:BORD LSBF') # each data point will become a word (i.e. two bytes), the Least Significant Byte (LSB) will come first
-    command(oscope, f':DIGitize CHANnel{chan}') # digitise channel, see Appendix (page 89)
-    command(oscope, f'CHAN{chan}:DATA?') # request channel data
-    bin_size = oscope.baud_rate
-    iterations = int(num_samples)/bin_size
-    iterations = ceil(iterations)
-
-    data = []
-    print('here')
-    count = 0
-    while count < int(num_samples):
-        temp_data = oscope.read_bytes(1)
-        data.append(temp_data)
-        count+=1
-        print(count)
-
-    #print(data)
-    #for _ in range(iterations-1):
-    #    temp_data = oscope.read_bytes(bin_size/2)
-    #    print(temp_data)
-    #    data.append(temp_data)
-    print('Length=', len(data))
-    data_join = b''.join(data)
-    ascii_code = []
-    for b in data_join:
-    #     print(b)
-         ascii_code.append(chr(b))
-    ascii_code_join = ''.join(ascii_code).split(',')
-    ascii_code_join_int = []
-    #print(ascii_code_join)
-    for i in ascii_code_join:
-         ascii_code_join_int.append(float(i))
-    print(ascii_code_join_int)
-    # print(ascii_code_join_int[0]* float(y_inc) + float(y_or))
-
-    no_of_data_array_elements= len(ascii_code_join_int)
-
-    time_values = []
-    voltages = []
-    for i in range(no_of_data_array_elements):
-        time_values.append((i * float(x_inc)) + float(x_or)) # recreates a vector for the X values using the ‘x_or’ and ‘x_inc’ values acquired from the scope
-        voltages.append((ascii_code_join_int[i] * float(y_inc)) + float(y_or)); # recreates the Y values using the ‘y_or’ and ‘y_inc’ values acquired from the scope
-
-    #print(time_values)
-    #print(voltages)
-    print('success')
-
-
-
-    # if method == "byte":
-    #     data = oscope.read_bytes(1)
-    #     while data != '#':
-    #         data = oscope.read_bytes(1)
-    #         print(data)
-    #     header_len_ascii=oscope.read_bytes(1)
-    #     header_len = int(chr(header_len_ascii))
-    #     acquired_length = oscope.read_bytes(header_len)
-    #     L=int(chr(acquired_length))
-    #     print('H_L', header_len)
-    #     print ('A_L=',acquired_length)
-    #     #bin_size=obj2.InputBufferSize;
-    #     #iterations=L/bin_size; # calculate number of bins/iterations
-    # #iter_no=ceil(iterations) # round iterations to the next integer
-    # #w=1
-    # #for k=1:(iter_no-1) # data acquisition loop
-    # #temp=fread(obj2,bin_size/2,'int16'); # read the data in the current bin. We are
-    # ## reading bin_size/2 elements of type ‘int16’(word). Since
-    # ## each ‘int16’ is two bytes long, we are actually reading bin_size bytes.
-    # #a(w:w-1+bin_size/2)=temp; # add the elements to the Y data vector, 'a'
-    # #w=w+bin_size/2; # increment index for vector 'a'
-    # #end
-    # #no_of_data_array_elements= max(size(a));
-
-    # #for i=1:1:no_of_data_array_elements
-    # ## See Appendix, page 89
-    # #time_value(i) =(i * xinc) + xorg; # recreates a vector for the Xvalues
-    # ## using the ‘xorg’ and ‘xinc’ values acquired from the scope
-    # #volts(i) = ( (a(i) * yinc_num ) + yorg_num ); #recreates a vector
-    # ## for the Yvalues
-
-    #elif method == "byte":
-    #    byte_count = 0
-    #    data_list = []
-    #    while byte_count != oscope.baud_rate:
-    #        data = oscope.read_bytes(1)
-    #        data_list.append(data)
-    #        byte_count += 1
-    #    waveform = data_list
-
-    return time_values, voltages
-
-
 def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     """Acquire waveform."""
 
     vin=vinpp/2 # vinpp is the pk-pk amplitude
     timespan=1/(frequency*2)  # initialise time span to two periods of the signal of frequency
-
-    ## OSCILLOSCOPE INITIAL SET-UP 
-
-    # SET BUFFER SIZE
 
     # SET UP CHANNEL
     command(oscope, 'CHAN1:TYPE HRES')
@@ -394,15 +264,15 @@ def acquire_waveform_W(chan, vinpp, frequency, offset=0.0):
     command(oscope, 'FORM:BORD LSBF')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     yinc = oscope.read()
-    time.sleep(1)
+    time.sleep(0.5)
+
+    # DATA ACQUISITION LOOP
     command(oscope, f'CHAN{chan}:DATA?')
     bin_size = oscope.baud_rate # determine data bin size
     iterations = int(num_samples)/bin_size # calculate number of bins/iterations
-    iter_no=ceil(iterations)-1; # round iterations to the next integer
-    iter_no *= 2
-
-    # DATA ACQUISITION LOOP
-    headerdata= oscope.read_bytes(8) # removes header
+    iter_no=ceil(iterations)-1; # round iterations to the next integer and minus 1 so that only data in the buffer is read
+    iter_no *= 2 # times by 2 as uint16 data is requested
+    headerdata = oscope.read_bytes(8) # removes header
     waveform_data = np.array([])
     
     for k in range(iter_no-1):
