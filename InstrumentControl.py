@@ -27,9 +27,11 @@ powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'
 # -------------------------------
 # UTILITY FUNCTIONS
 # -------------------------------
+
 def command(instrument, command):
     "Writes to oscilloscope"
     print(instrument.write(command))
+
 
 def read(instrument, command):
     "Reads from oscilloscope"
@@ -115,15 +117,10 @@ def oscope_coupling(channel, coupling):
 def oscope_trigger_settings(channel, trigger_level=0):
     """Sets Trigger Settings"""
     command(oscope, "TRIG:A:MODE AUTO")  # Trigger Auto mode in case of no signal is applied
-    command(oscope, "TRIG:A:TYPE EDGE;:TRIG:A:EDGE:SLOP POS")  # Trigger type Edge Positive
-    #command(oscope,'TRIGger:SLOpe POSitive')
+    command(oscope, "TRIG:A:TYPE EDGE;:TRIG:A:EDGE:SLOP POS")  # Trigger to a positive rising edge
     command(oscope, f"TRIG:A:SOUR CH{channel}")  # Trigger source Channel set
     command(oscope, f"TRIG:A:LEV{trigger_level}")  # Trigger level set
 
-#command(oscope,':TRIGger:EDGE:SOURce channel3');
-#command(oscope,'TRIGger:MODE EDGE');                 
-#command(oscope,'TRIGger:SLOpe POSitive');
-#command(oscope,'TRIGger:LEVel 0');
 
 def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
@@ -136,31 +133,52 @@ def oscope_set_siggen(v, f, offset=0.0):
 def auto_adjust(v, f, chan, meas_chan): # FIX
     """Autoscales so the waveform always fits the screen"""
 
+    # Set default scale
+    timespan = 1/(f*3) # initialise time span to three periods of the signal
+    # Time axis
+    command(oscope, f"TIMebase:RANGe {timespan/12}")
+
+    # Voltage axis
+    command(oscope, f"CHANnel{chan}:RANGe{10}")
+    command(oscope, f'DVM{meas_chan}:SOUR CH{chan}')
+    command(oscope, f'DVM{meas_chan}:TYPE ACDCrms') # read voltage
+    command(oscope, f'DVM{meas_chan}:RES?')
+    voltage = oscope.read()
+    if voltage.isnumeric():
+        command(oscope, f"CHANnel{chan}:RANGe{voltage*1.2}")
+    else: # if clipping
+        command(oscope, f"CHANnel{chan}:RANGe{80}")
+        command(oscope, f'DVM{meas_chan}:SOUR CH{chan}')
+        command(oscope, f'DVM{meas_chan}:TYPE ACDCrms') # read voltage
+        command(oscope, f'DVM{meas_chan}:RES?')
+        command(oscope, f"CHANnel{chan}:RANGe{voltage*1.2}")
+
     # Initial time axis adjustment
-    f # a test frequency, testf, is used to work out the initial settings. testf is set to the first value of the range of frequencies used for the frequency response
-    timespan = 1/f*3 # initialise time span to three periods of the signal of frequency testf
-    command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
-    g = 10  # initial gain estimate, this will set the vertical range to twice the first pk-pk voltage
+    #timespan = 1/f*3 # initialise time span to three periods of the signal of frequency testf
+    #command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
+    #g = 10  # initial gain estimate, this will set the vertical range to twice the first pk-pk voltage
     
     # Adjusts time axis
-    if timespan > 10*1/f: # if too many periods are shown reduce timespan
-        timespan = 1/(f*3)
-        command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
+    #if timespan > 10*1/f: # if too many periods are shown reduce timespan
+    #    timespan = 1/(f*3)
+    #    command(oscope, f"timebase:scale {timespan/12}") # find time/div by dividing timespan by 12
 
     # Initial voltage axis adjustment
-    command(oscope, f"channel{chan}:SCALE {g*v/10}")
-    v_meas = read_measurement(meas_chan)
+    #command(oscope, f"channel{chan}:SCALE {g*v/10}")
+    #v_meas = read_measurement(meas_chan)
             
     # Adjusts voltage axis
-    while v_meas > (0.85*g*v):   # if the pk-pk output voltage occupies more than 85# of the screen, change volts/div
-        g = 1.5*g
-        command(oscope, f"channel{chan}:SCALE {g*v/10}")
-        v_meas = read_measurement(meas_chan)
+    #while v_meas > (0.85*g*v):   # if the pk-pk output voltage occupies more than 85# of the screen, change volts/div
+    #    g = 1.5*g
+    #    command(oscope, f"channel{chan}:SCALE {g*v/10}")
+    #    v_meas = read_measurement(meas_chan)
             
-        if v_meas < 0.3*g*v:  # if the pk-pk output voltage occupies less than 30# of the screen, change volts/div
-            g = g/3
-            command(oscope, f"channel{chan}:SCALE {g*v/10}")
-            v_meas = read_measurement(meas_chan)
+    #    if v_meas < 0.3*g*v:  # if the pk-pk output voltage occupies less than 30# of the screen, change volts/div
+    #        g = g/3
+    #        command(oscope, f"channel{chan}:SCALE {g*v/10}")
+    #        v_meas = read_measurement(meas_chan)
+
+    return None
 
 
 def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2=2):
@@ -188,6 +206,41 @@ def read_measurement(meas_chan, meas_type=0):
     value = float(value_string)
 
     return value
+
+
+def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, chan3=3):
+    """Take measurements for the voltages and frequencies specified."""
+    
+    # Set up measurement channels
+    measurement_channel_setup(1, 'PEAK', 1)
+    measurement_channel_setup(2, 'PEAK', 2)
+    measurement_channel_setup(3, 'PHASe', 1, 2)
+
+    # Set trigger level
+    oscope_auto_adjust(chan1)
+    oscope_trigger_settings(chan1)
+
+    #Initiate result variables
+    v_in_list = []
+    v_out_list = []
+    phase_list = []
+    results_dict = {} 
+
+    # Run tests
+    for v in vin_PP:
+        for f in frequencies:
+            oscope_set_siggen(v,f)
+            oscope_auto_adjust(chan1)
+            time.sleep(1) # wait for changes to take effect
+            v_in = read_measurement(chan1)
+            v_out = read_measurement(chan2)
+            phase = read_measurement(chan3)
+            v_in_list.append(v_in)
+            v_out_list.append(v_out)
+            phase_list.append(phase)
+            results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
+
+    return results_dict
 
 
 def acquire_waveform(chan, vinpp, frequency, offset=0.0):
@@ -293,8 +346,8 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     plt.plot(times,voltages)
     plt.show()
 
-    # CLOSE INSTRUMENT
-    oscope.close()
+    # RUN THE OSCILLOSCOPE
+    command(oscope, 'RUN')
 
     return times, voltages
 
@@ -321,29 +374,15 @@ for instrument in instruments:
     except Exception:
         print(f"Connection to {str(instrument)} failed")
 
-# Control Instruments
-
 # Set up oscilloscope
 oscope_preset()
 oscope_default_settings(1)
 #oscope_default_settings(2)
 
-# Set up measurement channels
-#measurement_channel_setup(1, 'PEAK', 1)
-#measurement_channel_setup(2, 'PEAK', 2)
-#measurement_channel_setup(3, 'PHASe', 1, 2)
-
 # Set parameters
 Vin_PP = [0.4, 1, 1.5]
 Offset = 0.0
 Frequencies = [10,100,1000,10000]
-
-# Initiate result variables
-#v_in_list = []
-#v_out_list = []
-#phase_list = []
-#results_dict = {} 
-
 
 # Set up signal generator
 oscope_set_siggen(Vin_PP[1],Frequencies[2])
@@ -356,31 +395,6 @@ time.sleep(0.1)
 # Acquire waveform
 times, voltages = acquire_waveform(1,Vin_PP[1],Frequencies[2])
 
+# Test circuit at specified voltages and frequencies
+results = test_circuit()
 
-#yrange_cmd=['channel3:RANGe ' num2str(3*vinpp)];
-#command(oscope, f'CHAN1:RANG 500);
-#command(oscope,':TRIGger:EDGE:SOURce channel3');
-#command(oscope,'TRIGger:MODE EDGE');                 
-#command(oscope,'TRIGger:SLOpe POSitive');
-#command(oscope,'TRIGger:LEVel 0');
-#command(oscope,['TIMEBASE:RANGE ' num2str(timespan)]);
-
-
-
-# for v in Vin_PP:
-#     for f in Frequencies:
-#         oscope_set_siggen(v,f)
-#         #auto_adjust(v, f, 1, 1)
-#         #auto_adjust(v, f, 2, 2)
-#         time.sleep(3) # wait for changes to take effect
-#         v_in = read_measurement(1)
-#         v_out = read_measurement(2)
-#         phase = read_measurement(3)
-#         values = acquire_waveform(1)
-#         print(values)
-#         v_in_list.append(v_in)
-#         v_out_list.append(v_out)
-#         phase_list.append(phase)
-#         results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
-
-# print(results_dict)
