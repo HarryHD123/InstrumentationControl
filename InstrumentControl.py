@@ -398,3 +398,4 @@ times, voltages = acquire_waveform(1,Vin_PP[1],Frequencies[2])
 # Test circuit at specified voltages and frequencies
 results = test_circuit()
 
+# Function to take in json data and extract data - implement serialiser
