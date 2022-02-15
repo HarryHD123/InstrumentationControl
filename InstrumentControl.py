@@ -218,7 +218,7 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, chan3=3):
     measurement_channel_setup(3, 'PHASe', 1, 2)
 
     # Set trigger level
-    oscope_auto_adjust(chan1)
+    #oscope_auto_adjust(chan1)
     oscope_trigger_settings(chan1)
 
     #Initiate result variables
@@ -231,7 +231,7 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, chan3=3):
     for v in vin_PP:
         for f in frequencies:
             oscope_set_siggen(v,f)
-            oscope_auto_adjust(chan1)
+            auto_adjust(chan1)
             time.sleep(1) # wait for changes to take effect
             v_in = read_measurement(chan1)
             v_out = read_measurement(chan2)
@@ -255,19 +255,7 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     command(oscope, 'FORM UINT,16;FORM?')
     form = oscope.read()
     command(oscope, f'TIM:SCAL {timespan}')
-    command(oscope, f'CHAN1:RANG {vinpp*10.5}')
-
-    # SET UP INTERNAL SIGNAL GENERATOR
-    # command(oscope,':WGEN:OUTPut ON')
-    # command(oscope,f':WGEN:VOLTage {vinpp}')
-    # command(oscope,f':WGEN:VOLTage:OFFset {offset}')
-    # command(oscope,f':WGEN:FREQuency {frequency}')
-
-    # SET UP TRIGGER
-    # command(oscope, f':TRIGger:EDGE:SOURce CHANnel{chan}')
-    # command(oscope,'TRIGger:MODE EDGE')             
-    # command(oscope,'TRIGger:SLOpe POSitive')
-    # command(oscope,'TRIGger:LEVel 0') 
+    command(oscope, f'CHAN1:RANG {vinpp*2.5}')
 
     # READ HEADER AND CALCULATION VARIABLES
     command(oscope, f'CHAN{chan}:DATA:HEAD?')
@@ -296,25 +284,6 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     y_inc = float(oscope.read())
 
-    # READ DATA CONVERSION INFO
-
-    # command(oscope, 'SING;*OPC?')
-    # opc = oscope.read()
-    # command(oscope, f'CHAN{chan}:DATA:YRES?')
-    # yres = oscope.read()
-    # yres = chr(int(yres))
-    # command(oscope, f'CHAN{chan}:DATA:YOR?')
-    # yor = oscope.read()
-    # command(oscope, f'CHAN{chan}:DATA:XOR?')
-    # xor = oscope.read()
-    # command(oscope, f'CHAN{chan}:DATA:XINC?')
-    # xinc = oscope.read()
-    # command(oscope, 'FORM UINT,16;FORM?')
-    # form = oscope.read()
-    # print(form)
-    # command(oscope, 'FORM:BORD LSBF')
-    # command(oscope, f'CHAN{chan}:DATA:YINC?')
-    # yinc = oscope.read()
     time.sleep(0.5)
 
     # DATA ACQUISITION LOOP
@@ -403,6 +372,4 @@ time.sleep(0.1)
 times, voltages = acquire_waveform(1,Vin_PP[1],Frequencies[2])
 
 # Test circuit at specified voltages and frequencies
-results = test_circuit()
-
-# Function to take in json data and extract data - implement serialiser
+results = test_circuit(Vin_PP, Frequencies)
