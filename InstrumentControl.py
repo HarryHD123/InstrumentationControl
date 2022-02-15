@@ -11,6 +11,7 @@ import pyvisa
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import json
 
 rm = pyvisa.ResourceManager()
 
@@ -383,6 +384,12 @@ oscope_default_settings(1)
 Vin_PP = [0.4, 1, 1.5]
 Offset = 0.0
 Frequencies = [10,100,1000,10000]
+
+# Recieve user input
+# Input = open('Input.json')
+# Data = json.load(Input)
+# print(Data)
+# Input.close()
 
 # Set up signal generator
 oscope_set_siggen(Vin_PP[1],Frequencies[2])
