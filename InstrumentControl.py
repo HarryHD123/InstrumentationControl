@@ -6,7 +6,8 @@
 # 4. Adjust oscilloscope settings
 # 5. Send commands to MATLAB to connect to and instruct the oscilloscope
 
-from math import ceil
+from cmath import log10
+import math
 import pyvisa
 import time
 import numpy as np
@@ -81,13 +82,14 @@ def oscope_preset():
     command(oscope, '*RST') # *RST resets the scope
 
 
-def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0'):
+def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0', probe_scale='10'):
     command(oscope, f"TIM:ACQT{acquisition_time}")  # 10ms Acquisition time
     command(oscope, f"CHAN{channel}:RANG {horizontal_range}")  # Horizontal range 5V (0.5V/div)
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset 0
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling DC 1MOhm
     command(oscope, f"CHAN{channel}:STAT ON")  # Switch Channel ON
     command(oscope, f"CHAN{channel}:TYPE HRES")  # Set to High Resolution
+    command(oscope, f'"PROB{channel}:SET:GAIN:MAN {probe_scale}')
 
 
 def oscope_channel_switch(channel, on_off):
@@ -129,10 +131,11 @@ def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, f":WGEN:VOLTage {v}")
     command(oscope, f":WGEN:VOLTage:OFFset {offset}")
     command(oscope, f":WGEN:FREQuency {f}")
+    time.sleep(0.5) # to allow waveform to settle
 
 
-def auto_adjust(chan, meas_chan=4):
-    """Autoscales so the waveform always fits the screen"""
+def auto_adjust_timeaxis(chan, meas_chan=4):
+    """Automatically adjusts the time axis."""
 
     # Time axis
     measurement_channel_setup(meas_chan, 'FREQ', chan)
@@ -142,6 +145,10 @@ def auto_adjust(chan, meas_chan=4):
         frequency = read_measurement(meas_chan)
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
 
+
+def auto_adjust_voltageaxis(chan, meas_chan=4):
+    """Automatically adjusts the voltage axis."""
+    
     # Voltage axis
     measurement_channel_setup(meas_chan, 'PEAK', chan)
     voltage = read_measurement(meas_chan)
@@ -157,7 +164,12 @@ def auto_adjust(chan, meas_chan=4):
         voltage *= 1.4
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
 
-    return None
+
+def auto_adjust(chan, meas_chan=4):
+    """Autoscales so the waveform always fits the screen"""
+
+    auto_adjust_timeaxis(chan, meas_chan)
+    auto_adjust_voltageaxis(chan, meas_chan)
 
 
 def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2=2):
@@ -175,7 +187,7 @@ def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2
 def read_measurement(meas_chan, meas_type=0):
     """Reads a specified measurement channel."""
 
-    time.sleep(0.7)
+    time.sleep(1) # Needed to allow the waveform to settle
     if meas_type == 0:
         command(oscope, f"MEASurement{meas_chan}:RESult?")
     else:
@@ -197,7 +209,6 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
 
     # Set trigger level
     oscope_trigger_settings(chan1)
-    #oscope_trigger_settings(chan2)
 
     #Initiate result variables
     v_in_list = []
@@ -206,13 +217,16 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
     results_dict = {} 
 
     # Run tests
+    oscope_set_siggen(vin_PP[0],frequencies[0]) # Turn on the signal generator
+    auto_adjust_timeaxis(chan1)
     for v in vin_PP:
+        command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
+        auto_adjust_voltageaxis(chan1)
         for f in frequencies:
-            oscope_set_siggen(v,f)
-            print(v, f)
-            auto_adjust(chan1)
-            #auto_adjust(chan2)
-            time.sleep(5) # wait for changes to take effect
+            command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
+            auto_adjust_timeaxis(chan1)
+            auto_adjust_voltageaxis(chan2)
+            # Take measurements and record data
             v_in = read_measurement(meas_chan1)
             v_out = read_measurement(meas_chan2)
             phase = read_measurement(meas_chan3)
@@ -222,6 +236,22 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
             results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
 
     return results_dict
+
+
+def freq_response(results, frequencies):
+    """Returns the frequency response from the data provided by the test_circuit function."""
+    
+    freq_resp=[]
+    freq_resp_dB=[]
+    for f in frequencies:
+        gainlist=[]
+        for v in Vin_PP:
+            gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
+        gain_avg = sum(gainlist)/len(gainlist)
+        freq_resp.append(gain_avg)
+        freq_resp_dB.append(10*(math.log10(gain_avg)))
+    
+    return freq_resp, freq_resp_dB
 
 
 def acquire_waveform(chan, vinpp, frequency, offset=0.0):
@@ -301,6 +331,37 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
 
     return times, voltages
 
+
+def characterise_filter(start_freq=100, end_freq=100000, points_per_decade=10):
+    """Characterises a filter."""
+
+    vin_PP = [1]
+    frequencies=[100,200,300,400,500,600,700,800,900,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
+    results = test_circuit(vin_PP, frequencies)
+    freq_resp, freq_resp_dB = freq_response(results, frequencies)
+    plot_freq_response(frequencies, freq_resp_dB)
+    print("SUCCESS")
+    print("HERE", (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]))
+    if (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]) > (freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1]):
+        print("Low-Pass")
+    else:
+        print("High-pass")
+
+# -------------------------------
+# PLOTTING FUNCTIONS
+# -------------------------------
+
+def plot_freq_response(frequencies, freq_resp_dB):
+    """Plots the frequency response of the circuit."""
+
+    plt.plot(frequencies, freq_resp_dB)
+    plt.semilogx()
+    plt.ylabel('Gain (dB)')
+    plt.xlabel('Frequency (Hz)')
+    plt.title('Frequency Response')
+    plt.show(block=False)
+    plt.show()
+
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
 # -------------------------------
@@ -327,12 +388,12 @@ for instrument in instruments:
 # Set up oscilloscope
 oscope_preset()
 oscope_default_settings(1)
-#oscope_default_settings(2)
+oscope_default_settings(2)
 
 # Set parameters
-Vin_PP = [0.4, 1, 1.5]
+Vin_PP = [1]
 Offset = 0.0
-Frequencies = [10,100,1000,10000]
+Frequencies = [100,250,500,750,1000,2500,5000,7500,10000,25000,50000,75000,100000]
 
 # Recieve user input
 #Input = open('testjson.json', 'r')
@@ -341,19 +402,16 @@ Frequencies = [10,100,1000,10000]
 #Offset = [Data['voltage_DC']]
 #Frequencies = [int(Data['voltage_AC_frequency_from']), int(Data['voltage_AC_frequency_to'])]
 #Input.close()
-
-print(Vin_PP, Offset, Frequencies)
-# Set up signal generator
-#oscope_set_siggen(Vin_PP[0],Frequencies[1])
-#time.sleep(0.5)
-#auto_adjust(1)
-# Set up trigger levels
-#oscope_trigger_settings(1, 0)
-#time.sleep(0.1)
-
-# Acquire waveform
-#times, voltages = acquire_waveform(1,Vin_PP[1],Frequencies[2])
+#print(Vin_PP, Offset, Frequencies)
 
 # Test circuit at specified voltages and frequencies
-results = test_circuit(Vin_PP, Frequencies)
-print(results)
+#Results = test_circuit(Vin_PP, Frequencies)
+#print(Results)
+
+characterise_filter()
+
+# Return the frequency response of the circuit
+#Freq_resp, Freq_resp_dB = freq_response(Results, Frequencies)
+
+# Plot
+#plot_freq_response(Frequencies, Freq_resp_dB)
