@@ -131,40 +131,30 @@ def oscope_set_siggen(v, f, offset=0.0):
     command(oscope, f":WGEN:FREQuency {f}")
 
 
-def auto_adjust(chan, meas_chan=4): # FIX
+def auto_adjust(chan, meas_chan=4):
     """Autoscales so the waveform always fits the screen"""
 
     # Time axis
     measurement_channel_setup(meas_chan, 'FREQ', chan)
     frequency = read_measurement(meas_chan)
-    if frequency > 10e+10:
+    if frequency > 10e+10: # If the frequnecy cannot be measured, adjusts the timebase until a frequency will be obtainable
         command(oscope, f"TIMebase:RANGe 0.2")
-        time.sleep(0.5)
         frequency = read_measurement(meas_chan)
-    print('FREQ:',frequency)
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
-    time.sleep(0.5)
 
     # Voltage axis
     measurement_channel_setup(meas_chan, 'PEAK', chan)
     voltage = read_measurement(meas_chan)
     vcheck = 80e-3
-    while voltage > 10e+10:
+    while voltage > 10e+10: # If clipping zooms out until a reading can be taken
         command(oscope, f"CHANnel{chan}:RANGe {vcheck}")
-        time.sleep(0.5)
         voltage = read_measurement(meas_chan)
         vcheck *= 10
-    print('v:', voltage)
     voltage *= 1.2
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
-    time.sleep(0.5)
     vcheck2 = read_measurement(meas_chan)
-    print('vcheck is:', vcheck)
-    print('v is:', voltage)
     if vcheck2 > 10e+10:
         voltage *= 1.4
-        print('2vcheck is:', vcheck)
-        print('2v is:', voltage)
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
 
     return None
@@ -185,7 +175,7 @@ def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2
 def read_measurement(meas_chan, meas_type=0):
     """Reads a specified measurement channel."""
 
-    time.sleep(0.3)
+    time.sleep(0.7)
     if meas_type == 0:
         command(oscope, f"MEASurement{meas_chan}:RESult?")
     else:
