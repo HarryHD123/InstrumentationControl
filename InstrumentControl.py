@@ -11,6 +11,7 @@ import math
 import pyvisa
 import time
 import numpy as np
+import scipy as sp
 import matplotlib.pyplot as plt
 import json
 
@@ -332,11 +333,12 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     return times, voltages
 
 
-def characterise_filter(start_freq=100, end_freq=100000, points_per_decade=10):
+def characterise_filter():
     """Characterises a filter."""
 
     vin_PP = [1]
     frequencies=[100,200,300,400,500,600,700,800,900,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
+    
     results = test_circuit(vin_PP, frequencies)
     freq_resp, freq_resp_dB = freq_response(results, frequencies)
     plot_freq_response(frequencies, freq_resp_dB)
@@ -351,11 +353,19 @@ def characterise_filter(start_freq=100, end_freq=100000, points_per_decade=10):
 # PLOTTING FUNCTIONS
 # -------------------------------
 
-def plot_freq_response(frequencies, freq_resp_dB):
+def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True):
     """Plots the frequency response of the circuit."""
 
-    plt.plot(frequencies, freq_resp_dB)
+    plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
     plt.semilogx()
+
+    if cutoff_3dB:
+        y_interp = sp.interpolate.interp1d(frequencies, freq_resp_dB)
+        cutoff_3dB_val = y_interp(-3)
+        print("3DB cutoff: ", cutoff_3dB_val)
+        plt.axhline(y=-3, xmin=frequencies[0], xmax=cutoff_3dB_val, color='r', linestyle='-', linewidth=2)
+        plt.axvline(x=cutoff_3dB_val, ymin=min(freq_resp_dB), ymax=-3, color='r', linestyle='-', linewidth=2)
+
     plt.ylabel('Gain (dB)')
     plt.xlabel('Frequency (Hz)')
     plt.title('Frequency Response')
