@@ -239,14 +239,14 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
     return results_dict
 
 
-def freq_response(results, frequencies):
+def freq_response(results, vin_PP, frequencies):
     """Returns the frequency response from the data provided by the test_circuit function."""
     
     freq_resp=[]
     freq_resp_dB=[]
     for f in frequencies:
         gainlist=[]
-        for v in Vin_PP:
+        for v in vin_PP:
             gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
         gain_avg = sum(gainlist)/len(gainlist)
         freq_resp.append(gain_avg)
@@ -339,15 +339,18 @@ def characterise_filter():
     vin_PP = [1]
     frequencies=[100,200,300,400,500,600,700,800,900,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
     
+    frequencies=[100,1000,5000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
+
     results = test_circuit(vin_PP, frequencies)
-    freq_resp, freq_resp_dB = freq_response(results, frequencies)
-    plot_freq_response(frequencies, freq_resp_dB)
-    print("SUCCESS")
-    print("HERE", (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]))
+    freq_resp, freq_resp_dB = freq_response(results, vin_PP, frequencies)
+
+    #print("HERE", (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]))
     if (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]) > (freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1]):
         print("Low-Pass")
     else:
         print("High-pass")
+
+    plot_freq_response(frequencies, freq_resp_dB)
 
 # -------------------------------
 # PLOTTING FUNCTIONS
@@ -360,15 +363,15 @@ def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True):
     plt.semilogx()
 
     if cutoff_3dB:
-        y_interp = sp.interpolate.interp1d(frequencies, freq_resp_dB)
-        cutoff_3dB_val = y_interp(-3)
-        print("3DB cutoff: ", cutoff_3dB_val)
-        plt.axhline(y=-3, xmin=frequencies[0], xmax=cutoff_3dB_val, color='r', linestyle='-', linewidth=2)
-        plt.axvline(x=cutoff_3dB_val, ymin=min(freq_resp_dB), ymax=-3, color='r', linestyle='-', linewidth=2)
+        cutoff_3dB_val = np.interp(-3, freq_resp_dB,frequencies)
+        plt.annotate(f'-3dB Cutoff:{cutoff_3dB_val:.0f}Hz', xy=[cutoff_3dB_val,-3], xytext=(5, 0), textcoords=('offset points'))
+        plt.plot(cutoff_3dB_val, -3, marker='D')
 
     plt.ylabel('Gain (dB)')
     plt.xlabel('Frequency (Hz)')
     plt.title('Frequency Response')
+    plt.autoscale()
+    plt.grid(which='both')
     plt.show(block=False)
     plt.show()
 
@@ -377,6 +380,23 @@ def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True):
 # -------------------------------
 
 # Main
+
+c = 16789.476
+print(f'{c:.0f}')
+
+a = [1,2,3,4,5,6,7,20,100]
+b= [2,5,6,3,4,7,8,9,10]
+
+plt.plot(a,b)
+plt.semilogx()
+plt.hlines(y=9, xmin=0, xmax=20, color='b', linestyle='--')
+plt.axvline(x=20, color='r', linestyle='--', linewidth=2)
+plt.plot(20,9, color='r', linewidth='5')
+#plt.annotate('Test55Hz', [20,9], xycoords='data',xytext=(1*(20/100), 0), textcoords="axes fraction")
+plt.annotate('Test55Hz', xy=[20,9], xytext=(20, 1.01), textcoords=('data', 'axes fraction'))#textcoords='offset points')
+plt.grid(which='both')
+plt.show()
+
 
 # Connect to Instruments
 quick = 1
@@ -401,9 +421,9 @@ oscope_default_settings(1)
 oscope_default_settings(2)
 
 # Set parameters
-Vin_PP = [1]
+Vin_PP = [0.2,1,5]
 Offset = 0.0
-Frequencies = [100,250,500,750,1000,2500,5000,7500,10000,25000,50000,75000,100000]
+Frequencies = [100,1000,10000,100000,1000000]
 
 # Recieve user input
 #Input = open('testjson.json', 'r')
@@ -415,13 +435,14 @@ Frequencies = [100,250,500,750,1000,2500,5000,7500,10000,25000,50000,75000,10000
 #print(Vin_PP, Offset, Frequencies)
 
 # Test circuit at specified voltages and frequencies
-#Results = test_circuit(Vin_PP, Frequencies)
-#print(Results)
-
-characterise_filter()
+Results = test_circuit(Vin_PP, Frequencies)
 
 # Return the frequency response of the circuit
-#Freq_resp, Freq_resp_dB = freq_response(Results, Frequencies)
+Freq_resp, Freq_resp_dB = freq_response(Results, Vin_PP, Frequencies)
 
 # Plot
-#plot_freq_response(Frequencies, Freq_resp_dB)
+plot_freq_response(Frequencies, Freq_resp_dB)
+print(Results)
+
+# Characterise filter
+characterise_filter()
