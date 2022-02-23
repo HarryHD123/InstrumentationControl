@@ -361,10 +361,8 @@ def characterise_filter(quick_sim=False, interpol=False, cutoff_3dB =True):
     else:
         print("High-pass")
 
-    #plot_freq_response(frequencies, freq_resp_dB, interp=quick_sim)
-
     if interpol and quick_sim:
-        back_interp = interp1d(frequencies, freq_resp_dB, fill_value="extrapolate")
+        back_interp = interp1d(frequencies, freq_resp_dB)#, fill_value="extrapolate")
         freq_resp_dB_interp = back_interp(frequencies_full)
         plt.plot(frequencies_full, freq_resp_dB_interp, color='r', linewidth=1.5)
         plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
