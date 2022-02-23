@@ -11,7 +11,7 @@ import math
 import pyvisa
 import time
 import numpy as np
-import scipy as sp
+from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import json
 
@@ -111,15 +111,20 @@ def oscope_range(channel, horizontal_range):
 
 
 def oscope_offset(channel, offset):
+    """Sets the DC ofset level."""
+
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset
 
 
 def oscope_coupling(channel, coupling):
+    """Sets the coupling mode."""
+
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling
 
 
 def oscope_trigger_settings(channel, trigger_level=0):
-    """Sets Trigger Settings"""
+    """Sets Trigger Settings."""
+
     command(oscope, "TRIG:A:MODE AUTO")  # Trigger Auto mode in case of no signal is applied
     command(oscope, "TRIG:A:TYPE EDGE;:TRIG:A:EDGE:SLOP POS")  # Trigger to a positive rising edge
     command(oscope, f"TRIG:A:SOUR CH{channel}")  # Trigger source Channel set
@@ -160,7 +165,7 @@ def auto_adjust_voltageaxis(chan, meas_chan=4):
         vcheck *= 10
     voltage *= 1.2
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
-    vcheck2 = read_measurement(meas_chan)
+    vcheck2 = read_measurement(meas_chan) # Check for clipping due to offset
     if vcheck2 > 10e+10:
         voltage *= 1.4
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
@@ -193,7 +198,7 @@ def read_measurement(meas_chan, meas_type=0):
         command(oscope, f"MEASurement{meas_chan}:RESult?")
     else:
         command(oscope, f"MEASurement{meas_chan}:RESult:{meas_type}?")
-    time.sleep(0.6) # Time for the oscilloscope to load the result
+    time.sleep(0.5) # Time for the oscilloscope to load the result
     value_string = oscope.read()
     value = float(value_string)
 
@@ -219,14 +224,14 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
 
     # Run tests
     oscope_set_siggen(vin_PP[0],frequencies[0]) # Turn on the signal generator
-    auto_adjust_timeaxis(chan1)
+    auto_adjust(chan1) # Adjust the scope
     for v in vin_PP:
         command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
-        auto_adjust_voltageaxis(chan1)
+        auto_adjust_voltageaxis(chan1) # Adjust input channel to correctly read the input voltage
         for f in frequencies:
             command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
-            auto_adjust_timeaxis(chan1)
-            auto_adjust_voltageaxis(chan2)
+            auto_adjust_timeaxis(chan1) # Readjust the time axis
+            auto_adjust_voltageaxis(chan2) # Readjust the output channel to correctly read output voltage
             # Take measurements and record data
             v_in = read_measurement(meas_chan1)
             v_out = read_measurement(meas_chan2)
@@ -333,40 +338,49 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     return times, voltages
 
 
-def characterise_filter():
+def characterise_filter(quick_sim=False, interpol=False, cutoff_3dB =True):
     """Characterises a filter."""
 
     vin_PP = [1]
-    frequencies=[100,200,300,400,500,600,700,800,900,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
+    frequencies_full = [100,200,300,400,500,600,700,800,900,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
+    frequencies_quick = [100,1000,5000,10000,25000,50000,75000,100000]
     
-    frequencies=[100,1000,5000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
+    if quick_sim:
+        frequencies = frequencies_quick
+    else:
+        frequencies = frequencies_full
 
     results = test_circuit(vin_PP, frequencies)
     freq_resp, freq_resp_dB = freq_response(results, vin_PP, frequencies)
 
-    #print("HERE", (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]))
-    if (freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)]) > (freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1]):
+    print('start', freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)])
+    print('end', freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1])
+
+    if (abs(freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)])) < abs((freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1])):
         print("Low-Pass")
     else:
         print("High-pass")
 
-    plot_freq_response(frequencies, freq_resp_dB)
+    #plot_freq_response(frequencies, freq_resp_dB, interp=quick_sim)
 
-# -------------------------------
-# PLOTTING FUNCTIONS
-# -------------------------------
-
-def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True):
-    """Plots the frequency response of the circuit."""
-
-    plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
-    plt.semilogx()
+    if interpol and quick_sim:
+        back_interp = interp1d(frequencies, freq_resp_dB, fill_value="extrapolate")
+        freq_resp_dB_interp = back_interp(frequencies_full)
+        plt.plot(frequencies_full, freq_resp_dB_interp, color='r', linewidth=1.5)
+        plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
+        plt.semilogx()
+    else:
+        plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
+        plt.semilogx()
 
     if cutoff_3dB:
-        cutoff_3dB_val = np.interp(-3, freq_resp_dB,frequencies)
+        cutoff_interp = interp1d(freq_resp_dB, frequencies)
+        cutoff_3dB_val =  cutoff_interp(-3)
+        print(cutoff_3dB_val)
         plt.annotate(f'-3dB Cutoff:{cutoff_3dB_val:.0f}Hz', xy=[cutoff_3dB_val,-3], xytext=(5, 0), textcoords=('offset points'))
         plt.plot(cutoff_3dB_val, -3, marker='D')
 
+    plt.plot()
     plt.ylabel('Gain (dB)')
     plt.xlabel('Frequency (Hz)')
     plt.title('Frequency Response')
@@ -376,26 +390,36 @@ def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True):
     plt.show()
 
 # -------------------------------
+# PLOTTING FUNCTIONS
+# -------------------------------
+
+def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True, interp=False):
+    """Plots the frequency response of the circuit."""
+
+
+
+# -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
 # -------------------------------
 
 # Main
 
-c = 16789.476
-print(f'{c:.0f}')
+# Test for plots
+# c = 16789.476
+# print(f'{c:.0f}')
 
-a = [1,2,3,4,5,6,7,20,100]
-b= [2,5,6,3,4,7,8,9,10]
+# a = [1,2,3,4,5,6,7,20,100]
+# b= [2,5,6,3,4,7,8,9,10]
 
-plt.plot(a,b)
-plt.semilogx()
-plt.hlines(y=9, xmin=0, xmax=20, color='b', linestyle='--')
-plt.axvline(x=20, color='r', linestyle='--', linewidth=2)
-plt.plot(20,9, color='r', linewidth='5')
-#plt.annotate('Test55Hz', [20,9], xycoords='data',xytext=(1*(20/100), 0), textcoords="axes fraction")
-plt.annotate('Test55Hz', xy=[20,9], xytext=(20, 1.01), textcoords=('data', 'axes fraction'))#textcoords='offset points')
-plt.grid(which='both')
-plt.show()
+# plt.plot(a,b)
+# plt.semilogx()
+# plt.hlines(y=9, xmin=0, xmax=20, color='b', linestyle='--')
+# plt.axvline(x=20, color='r', linestyle='--', linewidth=2)
+# plt.plot(20,9, color='r', linewidth='5')
+# #plt.annotate('Test55Hz', [20,9], xycoords='data',xytext=(1*(20/100), 0), textcoords="axes fraction")
+# plt.annotate('Test55Hz', xy=[20,9], xytext=(20, 1.01), textcoords=('data', 'axes fraction'))#textcoords='offset points')
+# plt.grid(which='both')
+# plt.show()
 
 
 # Connect to Instruments
@@ -435,14 +459,14 @@ Frequencies = [100,1000,10000,100000,1000000]
 #print(Vin_PP, Offset, Frequencies)
 
 # Test circuit at specified voltages and frequencies
-Results = test_circuit(Vin_PP, Frequencies)
+#Results = test_circuit(Vin_PP, Frequencies)
 
 # Return the frequency response of the circuit
-Freq_resp, Freq_resp_dB = freq_response(Results, Vin_PP, Frequencies)
+#Freq_resp, Freq_resp_dB = freq_response(Results, Vin_PP, Frequencies)
 
 # Plot
-plot_freq_response(Frequencies, Freq_resp_dB)
-print(Results)
+#plot_freq_response(Frequencies, Freq_resp_dB)
+#print(Results)
 
 # Characterise filter
-characterise_filter()
+characterise_filter(quick_sim=True, interpol=True)
