@@ -11,7 +11,7 @@ import math
 import pyvisa
 import time
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, Akima1DInterpolator, PchipInterpolator
 import matplotlib.pyplot as plt
 import json
 
@@ -146,7 +146,7 @@ def auto_adjust_timeaxis(chan, meas_chan=4):
     # Time axis
     measurement_channel_setup(meas_chan, 'FREQ', chan)
     frequency = read_measurement(meas_chan)
-    if frequency > 10e+10: # If the frequnecy cannot be measured, adjusts the timebase until a frequency will be obtainable
+    while frequency > 10e+10: # If the frequnecy cannot be measured, adjusts the timebase until a frequency will be obtainable
         command(oscope, f"TIMebase:RANGe 0.2")
         frequency = read_measurement(meas_chan)
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
@@ -182,6 +182,7 @@ def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2
     """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
     
     command(oscope, f"MEASurement{meas_chan}:ON")
+
     if meas_type == 'PHASe':
         command(oscope, f"MEASurement{meas_chan}:SOURce CH{source_chan_2},CH{source_chan_1}") # Set sources to be chosen channels
         command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
@@ -190,88 +191,41 @@ def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2
         command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
 
 
-def read_measurement(meas_chan, meas_type=0):
+def read_measurement(meas_chan, meas_type=0, statistics=False):
     """Reads a specified measurement channel."""
 
-    time.sleep(1) # Needed to allow the waveform to settle
-    if meas_type == 0:
-        command(oscope, f"MEASurement{meas_chan}:RESult?")
+    if statistics:
+        command(oscope, f"MEASurement{meas_chan}:STATistics:RESet")
+        time.sleep(2) # Needed to statistics to be reset and some values taken
+        #command(oscope, f"MEASurement{meas_chan}:STATistics:VALue?")
+        command(oscope, f"MEASurement{meas_chan}:RESult:AVG?")
     else:
-        command(oscope, f"MEASurement{meas_chan}:RESult:{meas_type}?")
-    time.sleep(0.5) # Time for the oscilloscope to load the result
+        time.sleep(0.5) # Needed to allow the waveform to settle
+        if meas_type == 0:
+            command(oscope, f"MEASurement{meas_chan}:RESult?")
+        else:
+            command(oscope, f"MEASurement{meas_chan}:RESult:{meas_type}?")        
+
+    time.sleep(0.75) # Time for the oscilloscope to load the result
     value_string = oscope.read()
     value = float(value_string)
 
     return value
 
 
-def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3):
-    """Take measurements for the voltages and frequencies specified."""
-    
-    # Set up measurement channels
-    measurement_channel_setup(meas_chan1, 'PEAK', chan1)
-    measurement_channel_setup(meas_chan2, 'PEAK', chan2)
-    measurement_channel_setup(meas_chan3, 'PHASe', chan1, chan2)
-
-    # Set trigger level
-    oscope_trigger_settings(chan1)
-
-    #Initiate result variables
-    v_in_list = []
-    v_out_list = []
-    phase_list = []
-    results_dict = {} 
-
-    # Run tests
-    oscope_set_siggen(vin_PP[0],frequencies[0]) # Turn on the signal generator
-    auto_adjust(chan1) # Adjust the scope
-    for v in vin_PP:
-        command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
-        auto_adjust_voltageaxis(chan1) # Adjust input channel to correctly read the input voltage
-        for f in frequencies:
-            command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
-            auto_adjust_timeaxis(chan1) # Readjust the time axis
-            auto_adjust_voltageaxis(chan2) # Readjust the output channel to correctly read output voltage
-            # Take measurements and record data
-            v_in = read_measurement(meas_chan1)
-            v_out = read_measurement(meas_chan2)
-            phase = read_measurement(meas_chan3)
-            v_in_list.append(v_in)
-            v_out_list.append(v_out)
-            phase_list.append(phase)
-            results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
-
-    return results_dict
-
-
-def freq_response(results, vin_PP, frequencies):
-    """Returns the frequency response from the data provided by the test_circuit function."""
-    
-    freq_resp=[]
-    freq_resp_dB=[]
-    for f in frequencies:
-        gainlist=[]
-        for v in vin_PP:
-            gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
-        gain_avg = sum(gainlist)/len(gainlist)
-        freq_resp.append(gain_avg)
-        freq_resp_dB.append(10*(math.log10(gain_avg)))
-    
-    return freq_resp, freq_resp_dB
-
-
-def acquire_waveform(chan, vinpp, frequency, offset=0.0):
+def acquire_waveform(chan, plot_graph=True):
     """Acquire waveform."""
 
-    vin=vinpp/2 # vinpp is the pk-pk amplitude
-    timespan=1/(frequency*2)  # initialise time span to two periods of the signal of frequency
+    # Parameters are set
+    #vin=vinpp/2 # vinpp is the pk-pk amplitude
+    #timespan=1/(frequency*2)  # initialise time span to two periods of the signal of frequency
 
     # SET UP CHANNEL
     command(oscope, 'CHAN1:TYPE HRES')
     command(oscope, 'FORM UINT,16;FORM?')
+    time.sleep(0.1)
     form = oscope.read()
-    command(oscope, f'TIM:SCAL {timespan}')
-    command(oscope, f'CHAN1:RANG {vinpp*2.5}')
+    auto_adjust(chan)
 
     # READ HEADER AND CALCULATION VARIABLES
     command(oscope, f'CHAN{chan}:DATA:HEAD?')
@@ -299,14 +253,13 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     command(oscope, 'FORM:BORD LSBF')
     command(oscope, f'CHAN{chan}:DATA:YINC?')
     y_inc = float(oscope.read())
-
-    time.sleep(0.5)
+    time.sleep(0.1)
 
     # DATA ACQUISITION LOOP
     command(oscope, f'CHAN{chan}:DATA?')
     bin_size = oscope.baud_rate # determine data bin size
     iterations = int(num_samples)/bin_size # calculate number of bins/iterations
-    iter_no=ceil(iterations)-1; # round iterations to the next integer and minus 1 so that only data in the buffer is read
+    iter_no = math.ceil(iterations)-1; # round iterations to the next integer and minus 1 so that only data in the buffer is read
     iter_no *= 2 # times by 2 as uint16 data is requested
     headerdata = oscope.read_bytes(8) # removes header
     waveform_data = np.array([])
@@ -315,8 +268,6 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
         temp_data = oscope.read_bytes(int(bin_size)) #'int16') # read the data in the current bin. We are
         mv = memoryview(temp_data).cast('H')
         bin_data = np.array(mv)
-        if k == 0:
-            print("BIN:", bin_data)
         waveform_data = np.append(waveform_data, bin_data)
         #  reading bin_size/2 elements of type ‘int16’(word).
         #  each ‘int16’ is two bytes long, so bin_size bytes are read.
@@ -329,8 +280,16 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     voltages = waveform_data * float(y_inc) + float(y_or) 
 
     # PLOT WAVEFORM
-    plt.plot(times,voltages)
-    plt.show()
+    if plot_graph:
+        plt.figure(2)
+        plt.plot(times,voltages)
+        plt.ylabel('Voltage (V))')
+        plt.xlabel('Time (s)')
+        plt.title('Waveform')
+        plt.autoscale()
+        plt.grid(which='both')
+        plt.show(block=False)
+        plt.show()
 
     # RUN THE OSCILLOSCOPE
     command(oscope, 'RUN')
@@ -338,47 +297,134 @@ def acquire_waveform(chan, vinpp, frequency, offset=0.0):
     return times, voltages
 
 
-def characterise_filter(quick_sim=False, interpol=False, cutoff_3dB =True):
-    """Characterises a filter."""
-
-    vin_PP = [1]
-    frequencies_full = [100,200,300,400,500,600,700,800,900,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000]
-    frequencies_quick = [100,1000,5000,10000,25000,50000,75000,100000]
+def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, statistics=True):
+    """Take measurements for the voltages and frequencies specified.
+    A frequency response is found for the results of this testing.
+    This frequency response can be plotted by setting plot_freq_resp=True.
+    A cutoff(dB) value can be found by setting cutoff=True. The cutoff value is set to -3dB by default, but can be changed by setting cutoff_dB_val equal to your specified value."""
     
-    if quick_sim:
-        frequencies = frequencies_quick
-    else:
-        frequencies = frequencies_full
+    # Set up measurement channels
+    measurement_channel_setup(meas_chan1, 'PEAK', chan1)
+    measurement_channel_setup(meas_chan2, 'PEAK', chan2)
+    measurement_channel_setup(meas_chan3, 'PHASe', chan1, chan2)
+    if statistics:
+        command(oscope, "MEASurement:STATistics ON")
 
-    results = test_circuit(vin_PP, frequencies)
-    freq_resp, freq_resp_dB = freq_response(results, vin_PP, frequencies)
+    # Set trigger level
+    oscope_trigger_settings(chan1)
+    oscope_set_siggen(vin_PP[0],frequencies[0]) # Turn on the signal generator
 
-    print('start', freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)])
-    print('end', freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1])
+    time.sleep(3) # Time for oscilloscope to set intial settings
 
+    #Initiate result variables
+    v_in_list = []
+    v_out_list = []
+    phase_list = []
+    results_dict = {} 
+ 
+    # Run tests
+    for v in vin_PP:
+        command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
+        command(oscope, f"CHANnel1:RANGe {v*1.2}") # Adjust input channel to correctly read the input voltage
+        for f in frequencies:
+            command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
+            command(oscope, f"TIMebase:RANGe {2/(f)}")
+            auto_adjust_voltageaxis(chan2) # Readjust the output channel to correctly read output voltage
+            # Take measurements and record data
+            v_in = read_measurement(meas_chan1, statistics=statistics)
+            v_out = read_measurement(meas_chan2, statistics=statistics)
+            phase = read_measurement(meas_chan3, statistics=statistics)
+            v_in_list.append(v_in)
+            v_out_list.append(v_out)
+            phase_list.append(phase)
+            results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
+
+    # ALL AUTO ADJUST
+    # # Run tests
+    # auto_adjust(chan1) # Adjust the scope
+    # for v in vin_PP:
+    #     command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
+    #     auto_adjust_voltageaxis(chan1) # Adjust input channel to correctly read the input voltage
+    #     for f in frequencies:
+    #         command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
+    #         auto_adjust_timeaxis(chan1) # Readjust the time axis
+    #         auto_adjust_voltageaxis(chan2) # Readjust the output channel to correctly read output voltage
+    #         # Take measurements and record data
+    #         v_in = read_measurement(meas_chan1, statistics=statistics)
+    #         v_out = read_measurement(meas_chan2, statistics=statistics)
+    #         phase = read_measurement(meas_chan3, statistics=statistics)
+    #         v_in_list.append(v_in)
+    #         v_out_list.append(v_out)
+    #         phase_list.append(phase)
+    #         results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
+
+    return results_dict
+
+
+def freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
+    """Returns the frequency response from the data provided by the test_circuit function."""
+    
+    freq_resp=[]
+    freq_resp_dB=[]
+    for f in frequencies:
+        gainlist=[]
+        for v in vin_PP:
+            gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
+        gain_avg = sum(gainlist)/len(gainlist)
+        freq_resp.append(gain_avg)
+        freq_resp_dB.append(10*(log10(gain_avg)))
+    
+    cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
+    cutoff_freq = cutoff_interp(cutoff_dB_val)
+    print("Cutoff", cutoff_freq)
+
+    return freq_resp, freq_resp_dB, cutoff_freq
+
+
+def characterise_filter(vin_PP=1, freq_min=100, freq_max=100000, points_per_dec=10, cutoff_dB_val=-3, freq_resp_graph=True, statistics=True):
+    """Characterises a filter and reutrns whether the filter is high or low pass.
+    By setting quick_sim=True, 4 points per decade are used instead of the standard 10 to speed up the process.
+    A graph can be plotted by setting plot_graph=True when calling the function. 
+    Interpolation is used to smooth the graph as standard when quick_sim is called.
+    The cutoff_3dB is added to the graph as a standard, calculated using Pchip Interpolation"""
+
+    # Calculate the frequencies to test along
+    ndecades = log10(freq_max) - log10(freq_min)
+    npoints = ndecades.real * points_per_dec
+    frequencies = np.logspace(log10(freq_min), log10(freq_max), num=int(npoints), endpoint=True, base=10)
+    frequencies = [f.real for f in frequencies]
+
+    # Test circuit and find the frequency response
+    results = test_circuit(vin_PP, frequencies, characterise_filter=True, statistics=statistics, cutoff_dB_val=cutoff_dB_val, freq_resp_graph=freq_resp_graph)
+    freq_resp, freq_resp_dB, cutoff_freq = freq_response(results, vin_PP, frequencies, cutoff_dB_val=cutoff_dB_val)
+
+    # Calculates whether the filter is high or low pass
     if (abs(freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)])) < abs((freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1])):
+        filter_type = "Low-Pass"
         print("Low-Pass")
     else:
+        filter_type = "High-Pass"
         print("High-pass")
 
-    if interpol and quick_sim:
-        back_interp = interp1d(frequencies, freq_resp_dB)#, fill_value="extrapolate")
-        freq_resp_dB_interp = back_interp(frequencies_full)
-        plt.plot(frequencies_full, freq_resp_dB_interp, color='r', linewidth=1.5)
-        plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
-        plt.semilogx()
-    else:
-        plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
-        plt.semilogx()
+    if freq_resp_graph:
+        plot_freq_resp(frequencies, freq_resp_dB, cutoff_dB_val, cutoff_freq)
 
-    if cutoff_3dB:
-        cutoff_interp = interp1d(freq_resp_dB, frequencies)
-        cutoff_3dB_val =  cutoff_interp(-3)
-        print(cutoff_3dB_val)
-        plt.annotate(f'-3dB Cutoff:{cutoff_3dB_val:.0f}Hz', xy=[cutoff_3dB_val,-3], xytext=(5, 0), textcoords=('offset points'))
-        plt.plot(cutoff_3dB_val, -3, marker='D')
+    return filter_type
 
-    plt.plot()
+
+def plot_freq_resp(frequencies, freq_resp_dB, cutoff_dB_val, cutoff_freq):
+    """Plots a frequency response graph."""
+
+    # Plotting
+    plt.figure(3)
+    plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
+    plt.semilogx()
+    
+    # Cutoff frequency calculated through interpolation and marked
+    plt.annotate(f'{cutoff_dB_val}dB Cutoff:{cutoff_freq:.0f}Hz', xy=[cutoff_freq,cutoff_dB_val], xytext=(7, 0), textcoords=('offset points'))
+    plt.plot(cutoff_freq, cutoff_dB_val, color='r', marker='x', markersize='10')
+
+    # Plotting
     plt.ylabel('Gain (dB)')
     plt.xlabel('Frequency (Hz)')
     plt.title('Frequency Response')
@@ -386,15 +432,6 @@ def characterise_filter(quick_sim=False, interpol=False, cutoff_3dB =True):
     plt.grid(which='both')
     plt.show(block=False)
     plt.show()
-
-# -------------------------------
-# PLOTTING FUNCTIONS
-# -------------------------------
-
-def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True, interp=False):
-    """Plots the frequency response of the circuit."""
-
-
 
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
@@ -421,31 +458,34 @@ def plot_freq_response(frequencies, freq_resp_dB, cutoff_3dB=True, interp=False)
 
 
 # Connect to Instruments
-quick = 1
-oscope = connect_instrument(oscilloscope1_string)
-instruments = [oscope]
-if quick == 0:
-    mmeter = connect_instrument(multimeter1_string)
-    psource = connect_instrument(powersupply1_string)
-    siggen = connect_instrument(signalgenerator1_string)
-    instruments = [oscope, mmeter, psource, siggen]
+# quick = 1
+# oscope = connect_instrument(oscilloscope1_string)
+# instruments = [oscope]
+# if quick == 0:
+#     mmeter = connect_instrument(multimeter1_string)
+#     psource = connect_instrument(powersupply1_string)
+#     siggen = connect_instrument(signalgenerator1_string)
+#     instruments = [oscope, mmeter, psource, siggen]
 
-for instrument in instruments:
-    try:
-        req_info(instrument)
-        print(f"Successfully connected to {instrument}")
-    except Exception:
-        print(f"Connection to {str(instrument)} failed")
+# for instrument in instruments:
+#     try:
+#         req_info(instrument)
+#         print(f"Successfully connected to {instrument}")
+#     except Exception:
+#         print(f"Connection to {str(instrument)} failed")
 
 # Set up oscilloscope
-oscope_preset()
-oscope_default_settings(1)
-oscope_default_settings(2)
+# oscope_preset()
+# oscope_default_settings(1)
+# oscope_default_settings(2)
 
 # Set parameters
-Vin_PP = [0.2,1,5]
+Vin_PP = [0.4,1,5]
 Offset = 0.0
 Frequencies = [100,1000,10000,100000,1000000]
+Vin_PP = [5]
+
+Cutoff_dB_val = -3
 
 # Recieve user input
 #Input = open('testjson.json', 'r')
@@ -456,15 +496,20 @@ Frequencies = [100,1000,10000,100000,1000000]
 #Input.close()
 #print(Vin_PP, Offset, Frequencies)
 
-# Test circuit at specified voltages and frequencies
-#Results = test_circuit(Vin_PP, Frequencies)
+# Test circuit at specified voltages and frequencies and calculate the frequency response
+Results = test_circuit(Vin_PP, Frequencies)
+Freq_resp, Freq_resp_dB, Cutoff_freq = freq_response(Results, Vin_PP, Frequencies, cutoff_dB_val=Cutoff_dB_val)
 
-# Return the frequency response of the circuit
-#Freq_resp, Freq_resp_dB = freq_response(Results, Vin_PP, Frequencies)
+# Plot the frequency response
+plot_freq_resp(Frequencies, Freq_resp_dB, Cutoff_dB_val, Cutoff_freq)
 
-# Plot
-#plot_freq_response(Frequencies, Freq_resp_dB)
-#print(Results)
+#print("Results", Results)
+#print("Freqresp_dB", Freq_resp_dB)
+#print("Cutoff", Cutoff_freq)
 
 # Characterise filter
-characterise_filter(quick_sim=True, interpol=True)
+Filter_Type = characterise_filter(statistics=False)
+
+# Acquire waveform
+#oscope_set_siggen(1,10000)
+#Times, Voltages = acquire_waveform(1)
