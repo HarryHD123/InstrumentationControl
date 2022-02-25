@@ -356,7 +356,7 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
     return results_dict
 
 
-def freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
+def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
     """Returns the frequency response from the data provided by the test_circuit function."""
     
     freq_resp=[]
@@ -391,7 +391,7 @@ def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_de
 
     # Test circuit and find the frequency response
     results = test_circuit(vin_PP, frequencies, statistics=statistics)
-    freq_resp, freq_resp_dB, cutoff_freq = freq_response(results, vin_PP, frequencies, cutoff_dB_val=cutoff_dB_val)
+    freq_resp, freq_resp_dB, cutoff_freq = calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=cutoff_dB_val)
 
     # Calculates whether the filter is high or low pass
     if (abs(freq_resp_dB[0]-freq_resp_dB[int(len(frequencies)*0.3)])) < abs((freq_resp_dB[int(len(frequencies)*0.7)]-freq_resp_dB[-1])):
@@ -434,24 +434,6 @@ def plot_freq_resp(frequencies, freq_resp_dB, cutoff_dB_val, cutoff_freq):
 
 # Main
 
-# Test for plots
-# c = 16789.476
-# print(f'{c:.0f}')
-
-# a = [1,2,3,4,5,6,7,20,100]
-# b= [2,5,6,3,4,7,8,9,10]
-
-# plt.plot(a,b)
-# plt.semilogx()
-# plt.hlines(y=9, xmin=0, xmax=20, color='b', linestyle='--')
-# plt.axvline(x=20, color='r', linestyle='--', linewidth=2)
-# plt.plot(20,9, color='r', linewidth='5')
-# #plt.annotate('Test55Hz', [20,9], xycoords='data',xytext=(1*(20/100), 0), textcoords="axes fraction")
-# plt.annotate('Test55Hz', xy=[20,9], xytext=(20, 1.01), textcoords=('data', 'axes fraction'))#textcoords='offset points')
-# plt.grid(which='both')
-# plt.show()
-
-
 # Connect to Instruments
 quick = 1
 oscope = connect_instrument(oscilloscope1_string)
@@ -493,7 +475,7 @@ Cutoff_dB_val = -3
 
 # Test circuit at specified voltages and frequencies and calculate the frequency response
 #Results = test_circuit(Vin_PP, Frequencies)
-#Freq_resp, Freq_resp_dB, Cutoff_freq = freq_response(Results, Vin_PP, Frequencies, cutoff_dB_val=Cutoff_dB_val)
+#Freq_resp, Freq_resp_dB, Cutoff_freq = calc_freq_response(Results, Vin_PP, Frequencies, cutoff_dB_val=Cutoff_dB_val)
 
 # Plot the frequency response
 #plot_freq_resp(Frequencies, Freq_resp_dB, Cutoff_dB_val, Cutoff_freq)
