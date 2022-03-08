@@ -2,6 +2,7 @@
 
 import math
 from numpy import linspace
+from scipy.interpolate import PchipInterpolator
 
 def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
     """Returns the frequency response from the data provided by the test_circuit function."""
@@ -23,7 +24,6 @@ def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
     return freq_resp, freq_resp_dB, cutoff_freq
 
 
-#DOESNT WORK IF START FREQ ISNT A POWER OF 10 (FIX)
 def points_list_maker(start_freq, end_freq, points_per_dec):
     """Creates a list of frequencies with a specified number of points per decade."""
 
@@ -33,26 +33,30 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
     point_maker=linspace(1,10,points_per_dec)
     freqs=[]
 
-    for i in range(int(first_dec),int(last_dec)):
+    for i in range(int(first_dec+1),int(last_dec)):
         temp_freqs = [int(j*10**i) for j in point_maker]
         freqs.append(temp_freqs)
 
     temp_freqs = []
-    if not int(last_dec)==last_dec:
-        for i in point_maker:
-            if i*10**int(last_dec) < end_freq:
-                temp_freqs.append(int(i*10**int(last_dec)))
-        if end_freq not in temp_freqs:
-            temp_freqs.append(end_freq)   
+    for i in point_maker:
+        if i*10**int(first_dec) > start_freq:
+            temp_freqs.append(int(i*10**int(first_dec)))
+        if i*10**int(last_dec) < end_freq:
+            temp_freqs.append(int(i*10**int(last_dec)))
+    if start_freq not in temp_freqs:
+        temp_freqs.append(start_freq)   
+    if end_freq not in temp_freqs:
+        temp_freqs.append(end_freq)   
         freqs.append(temp_freqs)
+    freqs.append(temp_freqs)
 
     all_freqs=[]
     for i in freqs:
         for j in i:
             all_freqs.append(j)
 
+    all_freqs = list(dict.fromkeys(all_freqs))
+    all_freqs.sort()
+
     return all_freqs
     
-print(points_list_maker(15,5000,4))
-
-# Save data
