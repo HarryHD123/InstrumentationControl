@@ -71,6 +71,34 @@ def req_info(instrument):
     print(f"\nHello, I am: '{idn}'")
 
 
+def connect_all_instruments(only_oscope=True, oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::INSTR', multimeter1_string = 'TCPIP0::192.168.1.5::5025::SOCKET', signalgenerator1_string = 'TCPIP0::192.168.1.3::inst0::INSTR', powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'):
+    
+    global oscope
+    if only_oscope:
+        oscope = connect_instrument(oscilloscope1_string)
+        mmeter = None
+        psource = None
+        siggen = None
+        instruments = [oscope]
+    else:
+        mmeter = connect_instrument(multimeter1_string)
+        psource = connect_instrument(powersupply1_string)
+        siggen = connect_instrument(signalgenerator1_string)
+        instruments = [oscope, mmeter, psource, siggen]
+
+    for instrument in instruments:
+        try:
+            req_info(instrument)
+            print(f"Successfully connected to {instrument}")
+        except Exception:
+            print(f"Connection to {str(instrument)} failed")
+
+    # Set up oscilloscope
+    oscope_preset()
+    oscope_default_settings(1)
+    oscope_default_settings(2)
+
+    return oscope, mmeter, psource, siggen
 # -------------------------------
 # OSCILLOSCOPE COMMANDS
 # -------------------------------
@@ -435,26 +463,26 @@ def plot_freq_resp(frequencies, freq_resp_dB, cutoff_dB_val, cutoff_freq):
 # Main
 
 # Connect to Instruments
-quick = 1
-oscope = connect_instrument(oscilloscope1_string)
-instruments = [oscope]
-if quick == 0:
-    mmeter = connect_instrument(multimeter1_string)
-    psource = connect_instrument(powersupply1_string)
-    siggen = connect_instrument(signalgenerator1_string)
-    instruments = [oscope, mmeter, psource, siggen]
+# quick = 1
+# oscope = connect_instrument(oscilloscope1_string)
+# instruments = [oscope]
+# if quick == 0:
+#     mmeter = connect_instrument(multimeter1_string)
+#     psource = connect_instrument(powersupply1_string)
+#     siggen = connect_instrument(signalgenerator1_string)
+#     instruments = [oscope, mmeter, psource, siggen]
 
-for instrument in instruments:
-    try:
-        req_info(instrument)
-        print(f"Successfully connected to {instrument}")
-    except Exception:
-        print(f"Connection to {str(instrument)} failed")
+# for instrument in instruments:
+#     try:
+#         req_info(instrument)
+#         print(f"Successfully connected to {instrument}")
+#     except Exception:
+#         print(f"Connection to {str(instrument)} failed")
 
-# Set up oscilloscope
-oscope_preset()
-oscope_default_settings(1)
-oscope_default_settings(2)
+# # Set up oscilloscope
+# oscope_preset()
+# oscope_default_settings(1)
+# oscope_default_settings(2)
 
 # Set parameters
 Vin_PP = [0.4,1,5]
