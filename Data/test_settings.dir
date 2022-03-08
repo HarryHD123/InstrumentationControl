@@ -1,0 +1,5 @@
+'voltages', (0, 16)
+'frequencies', (512, 35)
+'dc_offset', (1024, 5)
+'meas_type', (1536, 14)
+'cutoff(dB)', (2048, 12)
