@@ -2,10 +2,15 @@ import pygame
 from Tools.PictureUploads import Loadify, TransformImage
 
 
-def RenderFont(text, size, colour):
+def RenderFont_import(text, size, colour):
     """Easy function that allows you to render a font quickly"""
-    return pygame.font.Font("Data/Fonts/Nasa21-l23X.ttf", size).render(text, True, colour)
-    #return pygame.font.Font("Data/Fonts/PixelFJVerdana12pt.ttf", size).render(text, True, colour)
+    return pygame.font.Font("Data/Fonts/PixelFJVerdana12pt.ttf", size).render(text, True, colour)
+
+def RenderFont(text, size, colour):
+    """Renders pygame fonts"""
+    pg_font = pygame.font.SysFont('Corbel', size)
+    return pg_font.render(text, True, colour)
+
 
 class CreateNumber(object):
     def __init__(self, text, width, height, screen, sign):
