@@ -452,9 +452,9 @@ for instrument in instruments:
         print(f"Connection to {str(instrument)} failed")
 
 # Set up oscilloscope
-#oscope_preset()
-#oscope_default_settings(1)
-#oscope_default_settings(2)
+oscope_preset()
+oscope_default_settings(1)
+oscope_default_settings(2)
 
 # Set parameters
 Vin_PP = [0.4,1,5]
