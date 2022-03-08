@@ -2,7 +2,7 @@ import pygame
 from Tools.FontRender import RenderFont
 from Tools.PictureUploads import Loadify, TransformImage
 import shelve
-import Initialise
+#import Initialise
 
 
 class Test_settings(object):
