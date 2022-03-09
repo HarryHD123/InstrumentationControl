@@ -1,9 +1,9 @@
-from turtle import width
+from cmath import log
 import pygame
 from Tools.FontRender import RenderFont
-from Tools.PictureUploads import Loadify, TransformImage
+from Tools.GraphTools import EmbedGraph
 import shelve
-from InstrumentControl import test_circuit
+from InstrumentControl import test_circuit, calc_freq_response, plot_freq_resp, acquire_waveform
 from DataManagement import points_list_maker
 #import Initialise
 
@@ -13,14 +13,15 @@ class Test_settings(object):
         
         # Set colours
         self.BLACK = (0,0,0)
-        self.GREEN = (0,155,0)
+        self.GREEN = (0,255,0)
         self.RED = (255,0,0)
         self.WHITE = (255,255,255)
         self.LGREY = (170,170,170)
         self.DGREY = (100,100,100)
-        self.LBLUE = (0, 204, 204)
+        self.LBLUE = (12, 181, 249)
         self.BACKGROUND = (254, 254, 254)
-        self.FONTSIZE = 25
+        self.FONTSIZE = 30
+        self.FONTSIZE_LARGE = 75
 
         # Set initial variables
         self.on_test_settings = True
@@ -40,6 +41,10 @@ class Test_settings(object):
         self.dc_offset = 0
         self.meas_type = 'PEAK'
         self.cutoff_dB = -3
+        self.results = None
+        self.freq_resp = None
+        self.freq_resp_dB = None
+        self.cutoff_freq = None
 
         # Render initial text
         self.voltages_textfont = RenderFont(f"Voltages (V):", self.FONTSIZE, self.BLACK)
@@ -62,7 +67,9 @@ class Test_settings(object):
         self.meas_type_valfont = RenderFont(f"{self.meas_type}", self.FONTSIZE, self.BLACK)
         self.cutoff_dB_valfont = RenderFont(f"{self.cutoff_dB}", self.FONTSIZE, self.BLACK)
         
+        self.heading_textfont = RenderFont("Circuit Testing Menu", self.FONTSIZE_LARGE, self.LBLUE)
         self.test_circ_textfont = RenderFont("Test Circuit", self.FONTSIZE, self.BLACK)
+        self.acq_freq_textfont = RenderFont(f"Acquire Frequency Response", self.FONTSIZE, self.BLACK)
         self.testing_textfont = RenderFont("Testing...", self.FONTSIZE, self.GREEN)
 
         # Create buttons and set background
@@ -112,38 +119,48 @@ class Test_settings(object):
         testing = False
         text = ''
         Input_fault = False
+        freq_resp_graph = False
+        freq_resp_plot = EmbedGraph((1,1), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True)
+        times = [1,2,3,4,5,6,7,8,9,10]
+        voltages = [0.1,0.2,0.3,0.2,0.1,0,-0.1,-0.2,-0.3,-0.2]
+        live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
         self.ReadSettings()
         while self.on_test_settings:
 
             self.screen.fill((self.BACKGROUND)) 
-            #self.screen.blit(self.background, [0, 0])
 
             for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    quit()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         self.on_test_settings = False
                     if typing:
                         if event.key == pygame.K_RETURN:
                             # Data entry checking
-                            if button_index in (0,1,2,4):
+                            if self.button_list.index(button_pressed) in (0,1,2,4):
                                 try:
                                     for i in text.split(","):
                                         float(i)
                                 except ValueError:
                                     Input_fault = True
 
-                                if button_index == 0:
+                                if self.button_list.index(button_pressed) == 0:
                                     self.voltages = text.split(",")
                                     self.voltages = [float(i) for i in self.voltages]
-                                if button_index == 1:
-                                    self.frequencies = text.split(",")
-                                    self.frequencies = [float(i) for i in self.frequencies]
-                                if button_index == 2:
+                                if self.button_list.index(button_pressed) == 1:
+                                    self.start_frequency = float(text)
+                                if self.button_list.index(button_pressed) == 2:
+                                    self.end_frequency = float(text)
+                                if self.button_list.index(button_pressed) == 3:
+                                    self.frequency_step = float(text)
+                                if self.button_list.index(button_pressed) == 4:
                                     self.dc_offset = float(text)
-                                if button_index == 4:
+                                if self.button_list.index(button_pressed) == 5:
                                     self.cutoff_dB = float(text)
 
-                            if button_index == 3:
+                            if self.button_list.index(button_pressed) == 6:
                                 if text != 'PEAK':
                                     Input_fault = True
                                 else:
@@ -163,60 +180,75 @@ class Test_settings(object):
             
             mx, my = pygame.mouse.get_pos()
             for buttons in self.button_list:
-                colour = self.DGREY
+                colour = self.LBLUE
                 pygame.draw.rect(self.screen, colour, buttons)
                 if buttons.collidepoint(mx, my):
-                    colour = self.LGREY
+                    colour = self.GREEN
                     pygame.draw.rect(self.screen, colour, buttons)
                     """If user clicks on any of the buttons"""
                     if click:
                         Input_fault = False
                         if self.button_list.index(buttons) == 0:
-                            button_index = 0
+                            button_pressed = self.button_list[0]
                             typing = True
                         elif self.button_list.index(buttons) == 1:
-                            button_index = 1
+                            button_pressed = self.button_list[1]
                             typing = True
                         elif self.button_list.index(buttons) == 2:
-                            button_index = 2
+                            button_pressed = self.button_list[2]
                             typing = True
                         elif self.button_list.index(buttons) == 3:
-                            button_index = 3
+                            button_pressed = self.button_list[3]
                             typing = True
                         elif self.button_list.index(buttons) == 4:
-                            button_index = 4
+                            button_pressed = self.button_list[4]
                             typing = True
                         elif self.button_list.index(buttons) == 5:
-                            self.ReadSettings()
-                            test_data_file = shelve.open("Data/test_data")
-                            self.screen.blit(self.testing_font, [600, 150])
-                            results = test_circuit(self.voltages, self.frequencies)
-                            test_data_file["results"] = results
-                            test_data_file.close()
-                            button_index = 5
+                            button_pressed = self.button_list[5]
+                            typing = True
                         elif self.button_list.index(buttons) == 6:
-                            button_index = 6
+                            button_pressed = self.button_list[6]
                             typing = True
                         elif self.button_list.index(buttons) == 7:
-                            button_index = 7
+                            button_pressed = self.button_list[7]
                             typing = True
                         elif self.button_list.index(buttons) == 8:
-                            button_index = 8
+                            button_pressed = self.button_list[8]
+                            self.ReadSettings()
+                            test_data_file = shelve.open("Data/test_data")
+                            self.screen.blit(self.testing_textfont, [800, 150])
+                            pygame.display.update()
+                            self.results = test_circuit(self.voltages, self.frequencies)
+                            test_data_file["results"] = self.results
+                            test_data_file.close()
                             typing = True
                         elif self.button_list.index(buttons) == 9:
-                            button_index = 9
+                            button_pressed = self.button_list[9]
+                            if self.results != None:
+                                test_data_file = shelve.open("Data/test_freqresp_data")
+                                self.freq_resp, self.freq_resp_dB, self.cutoff_freq = calc_freq_response(self.results, self.voltages, self.frequencies, self.cutoff_dB)
+                                test_data_file["freq_resp"] = self.freq_resp
+                                test_data_file["freq_resp_dB"] = self.freq_resp_dB
+                                test_data_file["cutoff_freq"] = self.cutoff_freq
+                                test_data_file.close()
+                                freq_resp_graph = True
+
                             typing = True
                         click = False
 
             if typing:
-                input_box = pygame.Rect(900 * self.scale, (button_index * 150 + 150) * self.scale, 500, 50)
-                text_font = RenderFont(f"{text}", 50, self.BLACK)
-                pygame.draw.rect(self.screen, self.WHITE, input_box)
-                self.screen.blit(text_font, [900 * self.scale, (button_index * 150 + 150) * self.scale])
+                input_box = pygame.Rect(button_pressed)
+                text_font = RenderFont(f"{text}", self.FONTSIZE, self.BLACK)
+                pygame.draw.rect(self.screen, self.GREEN, input_box)
+                self.screen.blit(text_font, [button_pressed[0], button_pressed[1]])
                     
             if Input_fault:
-                fault_font = RenderFont(f"Invalid setting entered", 50, self.RED)
-                self.screen.blit(fault_font, [1200 * self.scale, (button_index * 150 + 150) * self.scale])
+                fault_font = RenderFont(f"Invalid setting entered", 25, self.RED)
+                self.screen.blit(fault_font, [button_pressed[0]+250, button_pressed[1]])
+
+            if self.results == None:
+                results_needed_font = RenderFont(f"Circuit must be tested first to acquire a frequency response", 25, self.RED)
+                self.screen.blit(results_needed_font, [100 * self.scale, 600 * self.scale])
 
             if self.rerender:
                 self.voltages_valfont_str = ""
@@ -234,35 +266,52 @@ class Test_settings(object):
                 self.WriteSettings()
                 self.rerender = False
 
-            self.screen.blit(self.voltages_textfont, [100 * self.scale, 50 * self.scale])
-            self.screen.blit(self.start_frequency_textfont, [100 * self.scale, 150 * self.scale])
-            self.screen.blit(self.end_frequency_textfont, [500 * self.scale, 150 * self.scale])
-            self.screen.blit(self.frequency_step_textfont, [900 * self.scale, 150 * self.scale])
-            self.screen.blit(self.dc_offset_textfont, [100 * self.scale, 250 * self.scale])
-            self.screen.blit(self.meas_type_textfont, [100 * self.scale, 350 * self.scale])
-            self.screen.blit(self.cutoff_dB_textfont, [100 * self.scale, 450 * self.scale])
-            self.screen.blit(self.test_circ_textfont, [self.width/2, 500 * self.scale])
+            self.screen.blit(self.voltages_textfont, [100 * self.scale, 150 * self.scale])
+            self.screen.blit(self.start_frequency_textfont, [100 * self.scale, 200 * self.scale])
+            self.screen.blit(self.end_frequency_textfont, [100 * self.scale, 250 * self.scale])
+            self.screen.blit(self.frequency_step_textfont, [100 * self.scale, 300 * self.scale])
+            self.screen.blit(self.dc_offset_textfont, [100 * self.scale, 350 * self.scale])
+            self.screen.blit(self.meas_type_textfont, [100 * self.scale, 400 * self.scale])
+            self.screen.blit(self.cutoff_dB_textfont, [100 * self.scale, 650 * self.scale])
+            self.screen.blit(self.test_circ_textfont, [700 * self.scale, 150 * self.scale])
+            self.screen.blit(self.acq_freq_textfont, [700 * self.scale, 650 * self.scale])
+            self.screen.blit(self.heading_textfont, [100 * self.scale, 50 * self.scale])
 
-            
-            self.screen.blit(self.voltages_valfont, [380 * self.scale, 50 * self.scale])
-            self.screen.blit(self.start_frequency_valfont, [380 * self.scale, 150 * self.scale])
-            self.screen.blit(self.end_frequency_valfont, [780 * self.scale, 150 * self.scale])
-            self.screen.blit(self.frequency_step_valfont, [1180 * self.scale, 150 * self.scale])
-            self.screen.blit(self.dc_offset_valfont, [380 * self.scale, 250 * self.scale])
-            self.screen.blit(self.meas_type_valfont, [380 * self.scale, 350 * self.scale])
-            self.screen.blit(self.cutoff_dB_valfont, [380 * self.scale, 450 * self.scale])
+            self.screen.blit(self.voltages_valfont, [420 * self.scale, 150 * self.scale])
+            self.screen.blit(self.start_frequency_valfont, [420 * self.scale, 200 * self.scale])
+            self.screen.blit(self.end_frequency_valfont, [420 * self.scale, 250 * self.scale])
+            self.screen.blit(self.frequency_step_valfont, [420 * self.scale, 300 * self.scale])
+            self.screen.blit(self.dc_offset_valfont, [420 * self.scale, 350 * self.scale])
+            self.screen.blit(self.meas_type_valfont, [420 * self.scale, 400 * self.scale])
+            self.screen.blit(self.cutoff_dB_valfont, [420 * self.scale, 650 * self.scale])
+
+            live_graph = False
+            if live_graph:
+                times, voltages = acquire_waveform(1)
+                live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
+                
+            self.screen.blit(live_plot, (1000,0))
+
+            if freq_resp_graph:
+                freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True)
+                freq_resp_graph = False
+
+            self.screen.blit(freq_resp_plot, (1000,500))
+
 
             pygame.display.update()
+
 
     def DrawButtons(self):
         """Draw the buttons for the upgrades menu"""
         button_list = []
-        button_list.append(pygame.Rect(100 * self.scale, 50 * self.scale, 220, 50)) # Voltage Button
-        button_list.append(pygame.Rect(100 * self.scale, 150 * self.scale, 220, 50)) # Start Frequency Button
-        button_list.append(pygame.Rect(500 * self.scale, 150 * self.scale, 220, 50)) # End Frequency Button
-        button_list.append(pygame.Rect(900 * self.scale, 150 * self.scale, 220, 50)) # Frequency Step Button
-        button_list.append(pygame.Rect(100 * self.scale, 250 * self.scale, 220, 50)) # DC Offset Button
-        button_list.append(pygame.Rect(100 * self.scale, 350 * self.scale, 220, 50)) # Meas Type Button
-        button_list.append(pygame.Rect(100 * self.scale, 450 * self.scale, 220, 50)) # Cutoff dB Button
-        button_list.append(pygame.Rect(self.width/2, 500 * self.scale, 220, 50)) # Test Circuit Button
+        button_list.append(pygame.Rect(420 * self.scale, 150 * self.scale, 150, 30)) # 1. Voltage Button
+        button_list.append(pygame.Rect(420 * self.scale, 200 * self.scale, 150, 30)) # 2. Start Frequency Button
+        button_list.append(pygame.Rect(420 * self.scale, 250 * self.scale, 150, 30)) # 3. End Frequency Button
+        button_list.append(pygame.Rect(420 * self.scale, 300 * self.scale, 150, 30)) # 4. Frequency Step Button
+        button_list.append(pygame.Rect(420 * self.scale, 350 * self.scale, 150, 30)) # 5. DC Offset Button
+        button_list.append(pygame.Rect(420 * self.scale, 400 * self.scale, 150, 30)) # 6. Meas Type Button
+        button_list.append(pygame.Rect(420 * self.scale, 650 * self.scale, 150, 30)) # 7. Cutoff dB Button
+        button_list.append(pygame.Rect(700 * self.scale, 150 * self.scale, 150, 30)) # 8. Test Circuit Button
+        button_list.append(pygame.Rect(700 * self.scale, 650 * self.scale, 360, 30)) # 9. Acquire Frequency Response Button
         return button_list
