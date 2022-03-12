@@ -1,5 +1,3 @@
-# Create additional data from the results
-
 import math
 from numpy import linspace
 from scipy.interpolate import PchipInterpolator
@@ -19,7 +17,6 @@ def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
     
     cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
     cutoff_freq = cutoff_interp(cutoff_dB_val)
-    print("Cutoff", cutoff_freq)
 
     return freq_resp, freq_resp_dB, cutoff_freq
 

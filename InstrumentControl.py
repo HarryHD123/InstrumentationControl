@@ -1,20 +1,16 @@
-## UPDATE
-# This script is designed to:
-# 1. Collate user input
-# 2. Preset the oscilloscope
-# 3. Adjust the signal generator settings
-# 4. Adjust oscilloscope settings
-# 5. Send commands to MATLAB to connect to and instruct the oscilloscope
-
 import math
 import pyvisa
 import time
 import numpy as np
-from scipy.interpolate import interp1d, Akima1DInterpolator, PchipInterpolator
 import matplotlib.pyplot as plt
+from DataManagement import *
+from GraphTools import plot_freq_resp
 import json
+from GUI_tk import oscope
 
 rm = pyvisa.ResourceManager()
+
+print(oscope)
 
 # -------------------------------
 # CONNECTING TO DEVICES
@@ -71,20 +67,13 @@ def req_info(instrument):
     print(f"\nHello, I am: '{idn}'")
 
 
-def connect_all_instruments(only_oscope=True, oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::INSTR', multimeter1_string = 'TCPIP0::192.168.1.5::5025::SOCKET', signalgenerator1_string = 'TCPIP0::192.168.1.3::inst0::INSTR', powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'):
+def connect_all_instruments(oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::INSTR', multimeter1_string = 'TCPIP0::192.168.1.5::5025::SOCKET', signalgenerator1_string = 'TCPIP0::192.168.1.3::inst0::INSTR', powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'):
     
-    global oscope
-    if only_oscope:
-        oscope = connect_instrument(oscilloscope1_string)
-        mmeter = None
-        psource = None
-        siggen = None
-        instruments = [oscope]
-    else:
-        mmeter = connect_instrument(multimeter1_string)
-        psource = connect_instrument(powersupply1_string)
-        siggen = connect_instrument(signalgenerator1_string)
-        instruments = [oscope, mmeter, psource, siggen]
+    oscope = connect_instrument(oscilloscope1_string)
+    mmeter = connect_instrument(multimeter1_string)
+    psource = connect_instrument(powersupply1_string)
+    siggen = connect_instrument(signalgenerator1_string)
+    instruments = [oscope, mmeter, psource, siggen]
 
     for instrument in instruments:
         try:
@@ -92,11 +81,6 @@ def connect_all_instruments(only_oscope=True, oscilloscope1_string = 'TCPIP0::19
             print(f"Successfully connected to {instrument}")
         except Exception:
             print(f"Connection to {str(instrument)} failed")
-
-    # Set up oscilloscope
-    oscope_preset()
-    oscope_default_settings(1)
-    oscope_default_settings(2)
 
     return oscope, mmeter, psource, siggen
 # -------------------------------
@@ -240,7 +224,7 @@ def read_measurement(meas_chan, meas_type=0, statistics=False):
     return value
 
 
-def acquire_waveform(chan, plot_graph=True):
+def acquire_waveform(chan, plot_graph=False):
     """Acquire waveform."""
 
     # SET UP CHANNEL
@@ -384,26 +368,6 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
     return results_dict
 
 
-def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
-    """Returns the frequency response from the data provided by the test_circuit function."""
-    
-    freq_resp=[]
-    freq_resp_dB=[]
-    for f in frequencies:
-        gainlist=[]
-        for v in vin_PP:
-            gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
-        gain_avg = sum(gainlist)/len(gainlist)
-        freq_resp.append(gain_avg)
-        freq_resp_dB.append(10*(math.log10(gain_avg)).real)
-    
-    cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
-    cutoff_freq = cutoff_interp(cutoff_dB_val)
-    print("Cutoff", cutoff_freq)
-
-    return freq_resp, freq_resp_dB, cutoff_freq
-
-
 def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_dec=10, cutoff_dB_val=-3, freq_resp_graph=True, statistics=True):
     """Characterises a filter and reutrns whether the filter is high or low pass.
     By setting quick_sim=True, 4 points per decade are used instead of the standard 10 to speed up the process.
@@ -412,10 +376,8 @@ def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_de
     The cutoff_3dB is added to the graph as a standard, calculated using Pchip Interpolation"""
 
     # Calculate the frequencies to test along
-    ndecades = math.log10(freq_max) - math.log10(freq_min)
-    npoints = ndecades.real * points_per_dec
-    frequencies = np.logspace(math.log10(freq_min), math.log10(freq_max), num=int(npoints), endpoint=True, base=10)
-    frequencies = [f.real for f in frequencies]
+    frequencies = points_list_maker(freq_min,freq_max,points_per_dec)
+
 
     # Test circuit and find the frequency response
     results = test_circuit(vin_PP, frequencies, statistics=statistics)
@@ -434,27 +396,6 @@ def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_de
 
     return filter_type
 
-
-def plot_freq_resp(frequencies, freq_resp_dB, cutoff_dB_val, cutoff_freq):
-    """Plots a frequency response graph."""
-
-    # Plotting
-    plt.figure(3)
-    plt.plot(frequencies, freq_resp_dB, color='b', linewidth=1.5)
-    plt.semilogx()
-    
-    # Cutoff frequency calculated through interpolation and marked
-    plt.annotate(f'{cutoff_dB_val}dB Cutoff:{cutoff_freq:.0f}Hz', xy=[cutoff_freq,cutoff_dB_val], xytext=(7, 0), textcoords=('offset points'))
-    plt.plot(cutoff_freq, cutoff_dB_val, color='r', marker='x', markersize='10')
-
-    # Plotting
-    plt.ylabel('Gain (dB)')
-    plt.xlabel('Frequency (Hz)')
-    plt.title('Frequency Response')
-    plt.autoscale()
-    plt.grid(which='both')
-    plt.show(block=False)
-    plt.show()
 
 # -------------------------------
 # RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
