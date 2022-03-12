@@ -130,9 +130,11 @@ def DrawButtons():
 
 pygame.init()
 title = "Instrumentation Control"
-screen_info = pygame.display.Info() #Required to set a good resolution for the game screen
-first_screen = (screen_info.current_w, screen_info.current_h-50) #Take 50 pixels from the height because the menu bar, window bar and dock takes space
+screen_info = pygame.display.Info() # Required to set a good resolution for the game screen
+first_screen = (screen_info.current_w, screen_info.current_h-50) # Take 50 pixels from the height because the menu bar, window bar and dock takes space
+first_screen = (1920,1080)
 screen = pygame.display.set_mode(first_screen, pygame.RESIZABLE)
 pygame.display.set_caption(title)
 
+print("1",screen_info.current_w, screen_info.current_h)
 MainMenu(screen)

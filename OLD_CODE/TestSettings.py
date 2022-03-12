@@ -28,6 +28,7 @@ class Test_settings(object):
         self.rerender = True
         self.screen = screen
         self.width, self.height = pygame.display.get_surface().get_size()
+        print("HERE", self.width, self.height)
         self.scale = self.width/1920
 
         # Set initial settings
@@ -72,10 +73,9 @@ class Test_settings(object):
         self.acq_freq_textfont = RenderFont(f"Acquire Frequency Response", self.FONTSIZE, self.BLACK)
         self.testing_textfont = RenderFont("Testing...", self.FONTSIZE, self.GREEN)
 
-        # Create buttons and set background
+        # Create buttons
         self.button_list = self.DrawButtons()  # sets the button locations on the screen
-        #self.background = Loadify("Images/settings_background.jpg")
-        #self.background = TransformImage(self.background, self.width, self.height)
+
 
     ###########
     """Read and write functions"""
@@ -113,12 +113,12 @@ class Test_settings(object):
 
     def ShowWindow(self):
         """Shows the window for test settings"""
-        
+
         click = False
         typing = False
-        testing = False
         text = ''
         Input_fault = False
+        live_graph = False
         freq_resp_graph = False
         freq_resp_plot = EmbedGraph((1,1), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True)
         times = [1,2,3,4,5,6,7,8,9,10]
@@ -285,19 +285,16 @@ class Test_settings(object):
             self.screen.blit(self.meas_type_valfont, [420 * self.scale, 400 * self.scale])
             self.screen.blit(self.cutoff_dB_valfont, [420 * self.scale, 650 * self.scale])
 
-            live_graph = False
             if live_graph:
                 times, voltages = acquire_waveform(1)
                 live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
-                
-            self.screen.blit(live_plot, (1000,0))
 
             if freq_resp_graph:
                 freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True)
                 freq_resp_graph = False
 
+            self.screen.blit(live_plot, (1000,0))
             self.screen.blit(freq_resp_plot, (1000,500))
-
 
             pygame.display.update()
 

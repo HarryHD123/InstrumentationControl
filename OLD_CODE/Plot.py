@@ -1,15 +1,16 @@
 # Plot data
 
-import matplotlib as plt
+from matplotlib import pyplot as plt
 
 # Test for plots
 # c = 16789.476
 # print(f'{c:.0f}')
 
-# a = [1,2,3,4,5,6,7,20,100]
-# b= [2,5,6,3,4,7,8,9,10]
+#a = [1,2,3,4,5,6,7,20,100]
+#b= [2,5,6,3,4,7,8,9,10]
 
-# plt.plot(a,b)
+#fig = plt.figure()
+#plt.plot(a,b)
 # plt.semilogx()
 # plt.hlines(y=9, xmin=0, xmax=20, color='b', linestyle='--')
 # plt.axvline(x=20, color='r', linestyle='--', linewidth=2)
@@ -17,8 +18,7 @@ import matplotlib as plt
 # #plt.annotate('Test55Hz', [20,9], xycoords='data',xytext=(1*(20/100), 0), textcoords="axes fraction")
 # plt.annotate('Test55Hz', xy=[20,9], xytext=(20, 1.01), textcoords=('data', 'axes fraction'))#textcoords='offset points')
 # plt.grid(which='both')
-# plt.show()
-
+#plt.show()
 
 def plot_freq_resp(frequencies, freq_resp_dB, cutoff_dB_val, cutoff_freq):
     """Plots a frequency response graph."""
