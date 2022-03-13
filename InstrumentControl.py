@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 from DataManagement import *
 from GraphTools import plot_freq_resp
 import json
-from GUI_tk import oscope
+import GUI_tk
+from importlib import reload
 
 rm = pyvisa.ResourceManager()
-
-print(oscope)
+oscope = None
 
 # -------------------------------
 # CONNECTING TO DEVICES
@@ -87,14 +87,14 @@ def connect_all_instruments(oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::
 # OSCILLOSCOPE COMMANDS
 # -------------------------------
 
-def oscope_preset():
+def oscope_preset(oscope):
     "Resets the oscilloscope"
     command(oscope, '*DCL') # *DCL clears status registers
     command(oscope, '*CLS') # *CLS clears output queue
     command(oscope, '*RST') # *RST resets the scope
 
 
-def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0', probe_scale='10'):
+def oscope_default_settings(oscope, channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0', probe_scale='10'):
     command(oscope, f"TIM:ACQT{acquisition_time}")  # 10ms Acquisition time
     command(oscope, f"CHAN{channel}:RANG {horizontal_range}")  # Horizontal range 5V (0.5V/div)
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset 0
@@ -104,7 +104,7 @@ def oscope_default_settings(channel='1', acquisition_time = 0.01, horizontal_ran
     command(oscope, f'"PROB{channel}:SET:GAIN:MAN {probe_scale}')
 
 
-def oscope_channel_switch(channel, on_off):
+def oscope_channel_switch(oscope, channel, on_off):
     "Switches channel on or off. Enter 1 to turn the channel on, 0 to turn the channel off"
     if on_off == '0':
         on_off == "OFF"
@@ -113,27 +113,27 @@ def oscope_channel_switch(channel, on_off):
     command(oscope, f"CHAN{channel}:STAT {on_off}")  # Switch Channel ON or OFF
 
 
-def oscope_acq_time(acquisition_time):
+def oscope_acq_time(oscope, acquisition_time):
     command(oscope, f"TIM:ACQT {acquisition_time}")  # 10ms Acquisition time
 
 
-def oscope_range(channel, horizontal_range):
+def oscope_range(oscope, channel, horizontal_range):
     command(oscope, f"CHAN{channel}:RANG {horizontal_range}")  # Horizontal range
 
 
-def oscope_offset(channel, offset):
+def oscope_offset(oscope, channel, offset):
     """Sets the DC ofset level."""
 
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset
 
 
-def oscope_coupling(channel, coupling):
+def oscope_coupling(oscope, channel, coupling):
     """Sets the coupling mode."""
 
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling
 
 
-def oscope_trigger_settings(channel, trigger_level=0):
+def oscope_trigger_settings(oscope, channel, trigger_level=0):
     """Sets Trigger Settings."""
 
     command(oscope, "TRIG:A:MODE AUTO")  # Trigger Auto mode in case of no signal is applied
@@ -142,7 +142,8 @@ def oscope_trigger_settings(channel, trigger_level=0):
     command(oscope, f"TRIG:A:LEV{trigger_level}")  # Trigger level set
 
 
-def oscope_set_siggen(v, f, offset=0.0):
+def oscope_set_siggen(oscope, v, f, offset=0.0):
+
     command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
     command(oscope, ":WGEN:OUTPut ON")
     command(oscope, f":WGEN:VOLTage {v}")
@@ -151,45 +152,45 @@ def oscope_set_siggen(v, f, offset=0.0):
     time.sleep(0.5) # to allow waveform to settle
 
 
-def auto_adjust_timeaxis(chan, meas_chan=4):
+def auto_adjust_timeaxis(oscope, chan, meas_chan=4):
     """Automatically adjusts the time axis."""
 
     # Time axis
-    measurement_channel_setup(meas_chan, 'FREQ', chan)
-    frequency = read_measurement(meas_chan)
+    measurement_channel_setup(oscope, meas_chan, 'FREQ', chan)
+    frequency = read_measurement(oscope, meas_chan)
     while frequency > 10e+10: # If the frequnecy cannot be measured, adjusts the timebase until a frequency will be obtainable
         command(oscope, f"TIMebase:RANGe 0.2")
-        frequency = read_measurement(meas_chan)
+        frequency = read_measurement(oscope, meas_chan)
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
 
 
-def auto_adjust_voltageaxis(chan, meas_chan=4):
+def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
     """Automatically adjusts the voltage axis."""
     
     # Voltage axis
-    measurement_channel_setup(meas_chan, 'PEAK', chan)
-    voltage = read_measurement(meas_chan)
+    measurement_channel_setup(oscope, meas_chan, 'PEAK', chan)
+    voltage = read_measurement(oscope, meas_chan)
     vcheck = 80e-3
     while voltage > 10e+10: # If clipping zooms out until a reading can be taken
         command(oscope, f"CHANnel{chan}:RANGe {vcheck}")
-        voltage = read_measurement(meas_chan)
+        voltage = read_measurement(oscope, meas_chan)
         vcheck *= 10
     voltage *= 1.2
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
-    vcheck2 = read_measurement(meas_chan) # Check for clipping due to offset
+    vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
     if vcheck2 > 10e+10:
         voltage *= 1.4
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
 
 
-def auto_adjust(chan, meas_chan=4):
+def auto_adjust(oscope, chan, meas_chan=4):
     """Autoscales so the waveform always fits the screen"""
 
-    auto_adjust_timeaxis(chan, meas_chan)
-    auto_adjust_voltageaxis(chan, meas_chan)
+    auto_adjust_timeaxis(oscope, chan, meas_chan)
+    auto_adjust_voltageaxis(oscope, chan, meas_chan)
 
 
-def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2=2):
+def measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1, source_chan_2=2):
     """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
     
     command(oscope, f"MEASurement{meas_chan}:ON")
@@ -202,7 +203,7 @@ def measurement_channel_setup(meas_chan, meas_type, source_chan_1, source_chan_2
         command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
 
 
-def read_measurement(meas_chan, meas_type=0, statistics=False):
+def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
     """Reads a specified measurement channel."""
 
     if statistics:
@@ -224,7 +225,7 @@ def read_measurement(meas_chan, meas_type=0, statistics=False):
     return value
 
 
-def acquire_waveform(chan, plot_graph=False):
+def acquire_waveform(oscope, chan, plot_graph=False):
     """Acquire waveform."""
 
     # SET UP CHANNEL
@@ -304,22 +305,22 @@ def acquire_waveform(chan, plot_graph=False):
     return times, voltages
 
 
-def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, statistics=True):
+def test_circuit(oscope, vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, statistics=True):
     """Take measurements for the voltages and frequencies specified.
     A frequency response is found for the results of this testing.
     This frequency response can be plotted by setting plot_freq_resp=True.
     A cutoff(dB) value can be found by setting cutoff=True. The cutoff value is set to -3dB by default, but can be changed by setting cutoff_dB_val equal to your specified value."""
     
     # Set up measurement channels
-    measurement_channel_setup(meas_chan1, 'PEAK', chan1)
-    measurement_channel_setup(meas_chan2, 'PEAK', chan2)
-    measurement_channel_setup(meas_chan3, 'PHASe', chan1, chan2)
+    measurement_channel_setup(oscope, meas_chan1, 'PEAK', chan1)
+    measurement_channel_setup(oscope, meas_chan2, 'PEAK', chan2)
+    measurement_channel_setup(oscope, meas_chan3, 'PHASe', chan1, chan2)
     if statistics:
         command(oscope, "MEASurement:STATistics ON")
 
     # Set trigger level
-    oscope_trigger_settings(chan1)
-    oscope_set_siggen(vin_PP[0],frequencies[0]) # Turn on the signal generator
+    oscope_trigger_settings(oscope, chan1)
+    oscope_set_siggen(oscope, vin_PP[0],frequencies[0]) # Turn on the signal generator
 
     time.sleep(3) # Time for oscilloscope to set intial settings
 
@@ -336,11 +337,11 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
         for f in frequencies:
             command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
             command(oscope, f"TIMebase:RANGe {2/(f)}")
-            auto_adjust_voltageaxis(chan2) # Readjust the output channel to correctly read output voltage
+            auto_adjust_voltageaxis(oscope, chan2) # Readjust the output channel to correctly read output voltage
             # Take measurements and record data
-            v_in = read_measurement(meas_chan1, statistics=statistics)
-            v_out = read_measurement(meas_chan2, statistics=statistics)
-            phase = read_measurement(meas_chan3, statistics=statistics)
+            v_in = read_measurement(oscope, meas_chan1, statistics=statistics)
+            v_out = read_measurement(oscope, meas_chan2, statistics=statistics)
+            phase = read_measurement(oscope, meas_chan3, statistics=statistics)
             v_in_list.append(v_in)
             v_out_list.append(v_out)
             phase_list.append(phase)
@@ -368,7 +369,7 @@ def test_circuit(vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2
     return results_dict
 
 
-def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_dec=10, cutoff_dB_val=-3, freq_resp_graph=True, statistics=True):
+def characterise_filter(oscope, vin_PP=[1], freq_min=100, freq_max=100000, points_per_dec=10, cutoff_dB_val=-3, freq_resp_graph=True, statistics=True):
     """Characterises a filter and reutrns whether the filter is high or low pass.
     By setting quick_sim=True, 4 points per decade are used instead of the standard 10 to speed up the process.
     A graph can be plotted by setting plot_graph=True when calling the function. 
@@ -380,7 +381,7 @@ def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_de
 
 
     # Test circuit and find the frequency response
-    results = test_circuit(vin_PP, frequencies, statistics=statistics)
+    results = test_circuit(oscope, vin_PP, frequencies, statistics=statistics)
     freq_resp, freq_resp_dB, cutoff_freq = calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=cutoff_dB_val)
 
     # Calculates whether the filter is high or low pass
@@ -402,6 +403,21 @@ def characterise_filter(vin_PP=[1], freq_min=100, freq_max=100000, points_per_de
 # -------------------------------
 
 # Main
+
+if __name__ == "__main__":
+    oscope = connect_instrument(oscilloscope1_string)
+    mmeter = connect_instrument(multimeter1_string)
+    psource = connect_instrument(powersupply1_string)
+    siggen = connect_instrument(signalgenerator1_string)
+    instruments = [oscope, mmeter, psource, siggen]
+
+    for instrument in instruments:
+        try:
+            req_info(instrument)
+            print(f"Successfully connected to {instrument}")
+        except Exception:
+            print(f"Connection to {str(instrument)} failed")
+    
 
 # Connect to Instruments
 # quick = 1

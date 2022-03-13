@@ -1,20 +1,14 @@
-from cgitb import text
-from operator import neg
 from tkinter import *
 import shelve
-from turtle import color
-import InstrumentControl
+from InstrumentControl import * #acquire_waveform, test_circuit, connect_instrument, oscope
 from DataManagement import *
 from GraphTools import EmbedGraph
-
-oscope = None
 
 class InstrumentationControlApp(Tk):
     def __init__(self):
         Tk.__init__(self)
         self._frame = None
-        global oscope 
-        self.oscope = oscope
+        self.oscope = None
         self.switch_frame(MainMenu)
 
     def switch_frame(self, frame_class):
@@ -22,8 +16,6 @@ class InstrumentationControlApp(Tk):
         if self._frame is not None:
             self._frame.destroy()
         self._frame = new_frame
-        global oscope
-        oscope = self.oscope
         self._frame.pack(fill = "both", expand = TRUE)
 
 class MainMenu(Frame):
@@ -87,9 +79,10 @@ class TestMenu(Frame):
         self.lbl_offset = Label (self, text='DC Offset (V)', font=('Helvetica', self.FONTSIZE))
         self.lbl_meastype = Label (self, text='Measuring Type', font=('Helvetica', self.FONTSIZE))
         self.lbl_cutoff = Label (self, text='Cutoff (dB)', font=('Helvetica', self.FONTSIZE))
+        self.lbl_testing = Label (self, text='Testing circuit\nPlease wait', font=('Helvetica', 10))
         self.lbl_connect_first = Label (self, text='Please connect to an oscillscope first\nfrom the connections menu', fg='red', font=('Helvetica', 10))
-        self.btn_testcircuit = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.update_live_graph(), self.change_state(self.btn_acquire_freqresp)], text = 'Test Circuit', height=2, width=15, font=('Helvetica', self.FONTSIZE))
-        self.btn_acquire_freqresp = Button (self, state=DISABLED, command=lambda:[self.update_freq_resp_plot()], text = 'Acquire\nFrequency Response', height=2, width=17, font=('Helvetica', self.FONTSIZE))
+        self.btn_testcircuit = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.acquire_results(master.oscope), self.update_live_graph(master.oscope), self.change_state(self.btn_acquire_freqresp)], text = 'Test Circuit', height=2, width=15, font=('Helvetica', self.FONTSIZE))
+        self.btn_acquire_freqresp = Button (self, state=DISABLED, command=lambda:[self.update_freq_resp_plot(master.oscope)], text = 'Acquire\nFrequency Response', height=2, width=17, font=('Helvetica', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(TestMenu)], text = 'RESET', font=('Helvetica', self.FONTSIZE), fg = 'red')
 
         # Create entries
@@ -135,10 +128,14 @@ class TestMenu(Frame):
         freq_resp_plot.place(relx=0.8, rely=0.75, anchor=CENTER)
         live_plot.place(relx=0.8, rely=0.25, anchor=CENTER)
 
-    def update_live_graph(self):
+    def acquire_results(self, oscope):
+        self.lbl_testing.place(relx=0.43, rely=0.2)
+        self.results = test_circuit(oscope, [self.voltages], self.frequencies)
+
+    def update_live_graph(self, oscope):
         times = [1,2,3,4,5,6,7,8,9,10]
         voltages = [0.1,0.2,0.3,0.2,0.1,0,-0.1,-0.2,-0.3,-0.2]
-        #times, voltages = acquire_waveform(1)
+        times, voltages = acquire_waveform(oscope, 1)
         live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
         live_plot.place(relx=0.8, rely=0.24, anchor=CENTER)
 
@@ -315,12 +312,14 @@ class ConnectionMenu(Frame):
         self.btn_connect_all.place(relx=0.5, rely=0.7, anchor=CENTER)
         self.btn_reset.place(relx=0.1, rely=0.7, anchor=CENTER)
 
+        self.connect_all(master)
+
     def connect_all(self, master):
-        master.oscope = InstrumentControl.connect_instrument(self.oscilloscope1_string)
-        master.siggen = InstrumentControl.connect_instrument(self.signalgenerator1_string)
-        master.multim = InstrumentControl.connect_instrument(self.multimeter1_string)
-        master.powers = InstrumentControl.connect_instrument(self.powersupply1_string)
-        master.oscope = "HELLO THERE"
+        master.oscope = connect_instrument(self.oscilloscope1_string)
+        master.siggen = connect_instrument(self.signalgenerator1_string)
+        master.multim = connect_instrument(self.multimeter1_string)
+        master.powers = connect_instrument(self.powersupply1_string)
+
         instr = [master.oscope, master.siggen, master.multim, master.powers]
         instr_lbl = [self.lbl_oscope_connect, self.lbl_siggen_connect, self.lbl_multim_connect, self.lbl_powers_connect]
         for i in range(4):
