@@ -9,6 +9,9 @@ class InstrumentationControlApp(Tk):
         Tk.__init__(self)
         self._frame = None
         self.oscope = None
+        self.siggen = None
+        self.multim = None
+        self.powers = None
         self.switch_frame(MainMenu)
 
     def switch_frame(self, frame_class):
@@ -54,11 +57,12 @@ class TestMenu(Frame):
 
          # Set colours
         self.LBLUE = (12, 181, 249)
-        self.FONTSIZE = 20
-        self.FONTSIZE_LARGE = 40
+        self.FONTSIZE = 15
+        self.FONTSIZE_LARGE = 35
 
         # Read inital settings
         self.ReadSettings()
+        self.siggen_setting = None
 
         # Create text Variables
         self.tk_voltages = StringVar(self, self.voltages)
@@ -71,7 +75,7 @@ class TestMenu(Frame):
 
         # Create buttons and labels
         self.btn_home = Button (self, command=lambda: [self.entry_update_values(), master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', self.FONTSIZE))
-        self.lbl_heading = Label (self, text='Circuit Testing Menu', font=('Helvetica', self.FONTSIZE_LARGE))
+        self.lbl_heading = Label (self, text='Circuit Testing Menu', font=('Helvetica', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
         self.lbl_voltages = Label (self, text='Voltages (V)', font=('Helvetica', self.FONTSIZE))
         self.lbl_startfreq = Label (self, text='Start Frequency (Hz)', font=('Helvetica', self.FONTSIZE))
         self.lbl_endfreq = Label (self, text='End Frequency (Hz)', font=('Helvetica', self.FONTSIZE))
@@ -79,82 +83,88 @@ class TestMenu(Frame):
         self.lbl_offset = Label (self, text='DC Offset (V)', font=('Helvetica', self.FONTSIZE))
         self.lbl_meastype = Label (self, text='Measuring Type', font=('Helvetica', self.FONTSIZE))
         self.lbl_cutoff = Label (self, text='Cutoff (dB)', font=('Helvetica', self.FONTSIZE))
+        self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope to test circuit\n and acquire waveform from the connections menu', fg='red', font=('Helvetica', 10))
         self.lbl_testing = Label (self, text='Testing circuit\nPlease wait', font=('Helvetica', 10))
-        self.lbl_connect_first = Label (self, text='Please connect to an oscillscope first\nfrom the connections menu', fg='red', font=('Helvetica', 10))
-        self.btn_testcircuit = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.acquire_results(master.oscope), self.update_live_graph(master.oscope), self.change_state(self.btn_acquire_freqresp)], text = 'Test Circuit', height=2, width=15, font=('Helvetica', self.FONTSIZE))
-        self.btn_acquire_freqresp = Button (self, state=DISABLED, command=lambda:[self.update_freq_resp_plot(master.oscope)], text = 'Acquire\nFrequency Response', height=2, width=17, font=('Helvetica', self.FONTSIZE))
+        self.lbl_results_first = Label (self, text='Please test circuit first\nto acquire results', fg='red', font=('Helvetica', 10))
+        self.btn_choose_siggen = Button (self, state=self.check_siggen_connection(master), command=lambda:[self.select_siggen(master)], text = 'Internal Signal Generator', font=('Helvetica', self.FONTSIZE))
+        self.btn_testcircuit = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.acquire_results(master.oscope, siggen=self.siggen_setting), self.check_freq_response_calc(self.btn_acquire_freqresp)], text = 'Test Circuit', height=2, width=15, font=('Helvetica', self.FONTSIZE))
+        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.update_live_graph(master.oscope)], text = 'Acquire Waveform', height=2, width=15, font=('Helvetica', self.FONTSIZE))
+        self.btn_acquire_freqresp = Button (self, state=DISABLED, command=lambda:[self.update_freq_resp_plot()], text = 'Acquire\nFrequency Response', height=2, width=17, font=('Helvetica', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(TestMenu)], text = 'RESET', font=('Helvetica', self.FONTSIZE), fg = 'red')
 
         # Create entries
         vcmd = self.register(self.callback_num)
         vcmd_neg = self.register(self.callback_num_neg)
-        self.entry_voltages = Entry (self, textvariable = self.tk_voltages, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE))
-        self.entry_startfreq = Entry (self, textvariable = self.tk_start_frequency, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE))
-        self.entry_endfreq = Entry (self, textvariable = self.tk_end_frequency, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE))
-        self.entry_freqsteps = Entry (self, textvariable = self.tk_frequency_step, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE))
-        self.entry_offset = Entry (self, textvariable = self.tk_dc_offset, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE))
-        self.entry_meastype = Entry (self, textvariable = self.tk_meas_type, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE))
-        self.entry_cutoff = Entry (self, textvariable = self.tk_cutoff_dB, validate='key', validatecommand=(vcmd_neg,'%P'), font=('Helvetica', self.FONTSIZE))
+        self.entry_voltages = Entry (self, textvariable = self.tk_voltages, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
+        self.entry_startfreq = Entry (self, textvariable = self.tk_start_frequency, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
+        self.entry_endfreq = Entry (self, textvariable = self.tk_end_frequency, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
+        self.entry_freqsteps = Entry (self, textvariable = self.tk_frequency_step, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
+        self.entry_offset = Entry (self, textvariable = self.tk_dc_offset, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
+        self.entry_meastype = Entry (self, textvariable = self.tk_meas_type, validate='key', validatecommand=(vcmd,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
+        self.entry_cutoff = Entry (self, textvariable = self.tk_cutoff_dB, validate='key', validatecommand=(vcmd_neg,'%P'), font=('Helvetica', self.FONTSIZE), width=7)
 
         # Place buttons, labels and entries
-        self.btn_home.place(relx=0.1, rely =0.1, anchor=CENTER)
+        self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
 
-        self.lbl_voltages.place(relx=0.1, rely=0.2, anchor=CENTER)
-        self.entry_voltages.place(relx=0.3, rely=0.2, anchor=CENTER)
-        self.lbl_startfreq.place(relx=0.1, rely=0.25, anchor=CENTER)
-        self.entry_startfreq.place(relx=0.3, rely=0.25, anchor=CENTER)
-        self.lbl_endfreq.place(relx=0.1, rely=0.3, anchor=CENTER)
-        self.entry_endfreq.place(relx=0.3, rely=0.3, anchor=CENTER)
-        self.lbl_freqsteps.place(relx=0.1, rely=0.35, anchor=CENTER)
-        self.entry_freqsteps.place(relx=0.3, rely=0.35, anchor=CENTER)
-        self.lbl_offset.place(relx=0.1, rely=0.4, anchor=CENTER)
-        self.entry_offset.place(relx=0.3, rely=0.4, anchor=CENTER)
-        self.lbl_meastype.place(relx=0.1, rely=0.45, anchor=CENTER)
-        self.entry_meastype.place(relx=0.3, rely=0.45, anchor=CENTER)
-        self.lbl_cutoff.place(relx=0.1, rely=0.55, anchor=CENTER)
-        self.entry_cutoff.place(relx=0.3, rely=0.55, anchor=CENTER)
+        self.lbl_voltages.place(relx=0.07, rely=0.17, anchor=CENTER)
+        self.entry_voltages.place(relx=0.15, rely=0.17, anchor=CENTER)
+        self.lbl_offset.place(relx=0.07, rely=0.22, anchor=CENTER)
+        self.entry_offset.place(relx=0.15, rely=0.22, anchor=CENTER)
+        self.lbl_meastype.place(relx=0.07, rely=0.27, anchor=CENTER)
+        self.entry_meastype.place(relx=0.15, rely=0.27, anchor=CENTER)
 
-        self.lbl_heading.place(relx=0.35, rely=0.1, anchor=CENTER)
-        self.btn_testcircuit.place(relx=0.5, rely=0.3, anchor=CENTER)
-        self.btn_acquire_freqresp.place(relx=0.5, rely=0.7, anchor=CENTER)
-        self.btn_reset.place(relx=0.1, rely=0.7, anchor=CENTER)
-        self.lbl_connect_first.place(relx=0.43, rely=0.2)
+        self.lbl_startfreq.place(relx=0.27, rely=0.17, anchor=CENTER)
+        self.entry_startfreq.place(relx=0.38, rely=0.17, anchor=CENTER)
+        self.lbl_endfreq.place(relx=0.27, rely=0.22, anchor=CENTER)
+        self.entry_endfreq.place(relx=0.38, rely=0.22, anchor=CENTER)
+        self.lbl_freqsteps.place(relx=0.27, rely=0.27, anchor=CENTER)
+        self.entry_freqsteps.place(relx=0.38, rely=0.27, anchor=CENTER)
+
+        self.lbl_cutoff.place(relx=0.46, rely=0.17, anchor=CENTER)
+        self.entry_cutoff.place(relx=0.53, rely=0.17, anchor=CENTER)
+        self.btn_choose_siggen.place(relx=0.42, rely=0.21)
+        
+        self.lbl_heading.place(relx=0.25, rely=0.07, anchor=CENTER)
+        self.btn_testcircuit.place(relx=0.85, rely=0.07, anchor=CENTER)
+        self.btn_acquire_waveform.place(relx=0.85, rely=0.25, anchor=CENTER)
+        self.btn_acquire_freqresp.place(relx=0.85, rely=0.16, anchor=CENTER)
+        self.btn_reset.place(relx=0.68, rely=0.25, anchor=CENTER)
+        self.lbl_connect_first.place(relx=0.58, rely=0.05)
+        self.lbl_results_first.place(relx=0.64, rely=0.14)        
 
         # Draw graphs
-        freq_resp_plot = EmbedGraph((1,1), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True)
+        self.freq_resp_plot = EmbedGraph((1,1), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True)
         times = [1,2,3,4,5,6,7,8,9,10]
         voltages = [0.1,0.2,0.3,0.2,0.1,0,-0.1,-0.2,-0.3,2]
-        live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
-        freq_resp_plot.place(relx=0.8, rely=0.75, anchor=CENTER)
-        live_plot.place(relx=0.8, rely=0.25, anchor=CENTER)
+        self.live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
+        self.freq_resp_plot.place(relx=0.75, rely=0.65, anchor=CENTER)
+        self.live_plot.place(relx=0.25, rely=0.65, anchor=CENTER)
+
+    def show_testing_label(self):
+        self.lbl_connect_first["text"] = 'Testing circuit\nPlease wait'
 
     def acquire_results(self, oscope):
-        self.lbl_testing.place(relx=0.43, rely=0.2)
         self.results = test_circuit(oscope, [self.voltages], self.frequencies)
+        self.lbl_connect_first["text"] = ""
 
     def update_live_graph(self, oscope):
-        times = [1,2,3,4,5,6,7,8,9,10]
-        voltages = [0.1,0.2,0.3,0.2,0.1,0,-0.1,-0.2,-0.3,-0.2]
         times, voltages = acquire_waveform(oscope, 1)
-        live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)')
-        live_plot.place(relx=0.8, rely=0.24, anchor=CENTER)
+        self.live_plot = EmbedGraph((times,voltages), heading='Current Waveform', x_label='Voltage (V)', y_label='Time (s)')
+        self.live_plot.place(relx=0.25, rely=0.65, anchor=CENTER)
 
     def update_freq_resp_plot(self):
-        self.freq_resp, self.freq_resp_dB, self.cutoff_freq = calc_freq_response(self.results, self.voltages, self.frequencies, self.cutoff_dB)
-        freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq])
-        freq_resp_plot.place(relx=0.8, rely=0.68, anchor=CENTER)
+        print(self.results)
+        self.freq_resp, self.freq_resp_dB, self.cutoff_freq = calc_freq_response(self.results, [self.voltages], self.frequencies, self.cutoff_dB)
+        self.freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq])
+        self.freq_resp_plot.place(relx=0.75, rely=0.65, anchor=CENTER)
 
-    def change_state(self, button):
-        """Changes the state of a button"""
+    def check_freq_response_calc(self, button):
+        """Changes the state of the frequency response button"""
         # If the STATE is NORMAL
-        if (button['state'] == NORMAL):
-    
-            # Change the state to DISABLED
-            button['state'] = DISABLED
-        else:
-            
-            # Otherwise, change the state to NORMAL
+        if self.results != None:
             button['state'] = NORMAL
+        else:
+            button['state'] = DISABLED
 
     def check_oscope_connection(self, master):
         """Checks if oscope is connected"""
@@ -162,8 +172,23 @@ class TestMenu(Frame):
             self.lbl_connect_first['text']=""
             return NORMAL            
         else:
-            self.lbl_connect_first['text']='Please connect to an oscillscope first\nfrom the connections menu'
+            self.lbl_connect_first['text']='Please connect to an oscilloscope to test circuit\n and acquire waveform from the connections menu'
             return DISABLED
+
+    def check_siggen_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.siggen != None:
+            return NORMAL            
+        else:
+            return DISABLED
+
+    def select_siggen(self, master):
+        if self.siggen_setting == None:
+            self.btn_choose_siggen['text'] = 'External signal generator'
+            self.siggen_setting = master.siggen
+        else:
+            self.btn_choose_siggen['text'] = 'Internal signal generator'
+            self.siggen_setting = None
 
     # Call backs to check data entry
     def callback_num(self, input):
@@ -198,7 +223,8 @@ class TestMenu(Frame):
         self.voltages = self.convert_num(self.entry_voltages.get())
         self.start_frequency = self.convert_num(self.entry_startfreq.get())
         self.end_frequency = self.convert_num(self.entry_endfreq.get())
-        self.freq_steps = self.convert_num(self.entry_freqsteps.get())
+        self.frequency_step = self.convert_num(self.entry_freqsteps.get())
+        self.frequencies = points_list_maker(self.start_frequency, self.end_frequency, self.frequency_step)
         self.dc_offset = self.convert_num(self.entry_offset.get())
         self.meas_type = self.entry_meastype.get()
         self.cutoff_dB = self.convert_num(self.entry_cutoff.get())
@@ -259,7 +285,7 @@ class ConnectionMenu(Frame):
         self.LBLUE = (12, 181, 249)
         self.BACKGROUND = (254, 254, 254)
         self.FONTSIZE = 20
-        self.FONTSIZE_LARGE = 40
+        self.FONTSIZE_LARGE = 35
 
         # Read Initial Settings
         self.ReadSettings_Connect()
@@ -272,7 +298,7 @@ class ConnectionMenu(Frame):
 
         # Create buttons and labels
         self.btn_home = Button (self, command=lambda: [self.entry_update_connections(), master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', self.FONTSIZE))
-        self.lbl_heading = Label (self, text='Connections Menu', font=('Helvetica', self.FONTSIZE_LARGE))
+        self.lbl_heading = Label (self, text='Connections Menu', font=('Helvetica', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
         self.lbl_oscope = Label (self, text='Oscilloscope:', font=('Helvetica', self.FONTSIZE))
         self.lbl_siggen = Label (self, text='Signal Generator:', font=('Helvetica', self.FONTSIZE))
         self.lbl_multim = Label (self, text='Multimeter:', font=('Helvetica', self.FONTSIZE))
@@ -292,7 +318,7 @@ class ConnectionMenu(Frame):
         self.entry_powers = Entry (self, textvariable = self.tk_powers, font=('Helvetica', self.FONTSIZE))
 
         # Place buttons, labels and entries
-        self.btn_home.place(relx=0.1, rely =0.1, anchor=CENTER)
+        self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
 
         self.lbl_oscope.place(relx=0.1, rely=0.2, anchor=CENTER)
         self.entry_oscope.place(relx=0.3, rely=0.2, anchor=CENTER)
@@ -303,12 +329,12 @@ class ConnectionMenu(Frame):
         self.lbl_powers.place(relx=0.1, rely=0.5, anchor=CENTER)
         self.entry_powers.place(relx=0.3, rely=0.5, anchor=CENTER)
 
-        self.lbl_oscope_connect.place(relx=0.6, rely=0.2, anchor=CENTER)
-        self.lbl_siggen_connect.place(relx=0.6, rely=0.3, anchor=CENTER)
-        self.lbl_multim_connect.place(relx=0.6, rely=0.4, anchor=CENTER)
-        self.lbl_powers_connect.place(relx=0.6, rely=0.5, anchor=CENTER)
+        self.lbl_oscope_connect.place(relx=0.5, rely=0.2, anchor=CENTER)
+        self.lbl_siggen_connect.place(relx=0.5, rely=0.3, anchor=CENTER)
+        self.lbl_multim_connect.place(relx=0.5, rely=0.4, anchor=CENTER)
+        self.lbl_powers_connect.place(relx=0.5, rely=0.5, anchor=CENTER)
 
-        self.lbl_heading.place(relx=0.35, rely=0.1, anchor=CENTER)
+        self.lbl_heading.place(relx=0.25, rely=0.07, anchor=CENTER)
         self.btn_connect_all.place(relx=0.5, rely=0.7, anchor=CENTER)
         self.btn_reset.place(relx=0.1, rely=0.7, anchor=CENTER)
 

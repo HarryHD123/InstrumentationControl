@@ -50,7 +50,7 @@ def connect_instrument(instrument_string):
         instrument.read_termination = '\n'  # Define the last line of an input to be a paragraph break
         instrument.write_termination = '\n'  # Set the output (to the instrument) to be end with a paragraph break
         instrument.baud_rate = 512  # Set buffer size to be 512
-        instrument.visa_timeout = 5000  # Timeout for VISA Read Operations
+        instrument.visa_timeout = 10000  # Timeout for VISA Read Operations
         instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
         instrument.instrument_status_checking = True  # Error check after each command
     except Exception as ex:
@@ -229,7 +229,7 @@ def acquire_waveform(oscope, chan, plot_graph=False):
     """Acquire waveform."""
 
     # SET UP CHANNEL
-    auto_adjust(chan)
+    auto_adjust(oscope, chan)
 
     command(oscope, 'CHAN1:TYPE HRES')
     command(oscope, 'FORM UINT,16;FORM?')
@@ -305,7 +305,7 @@ def acquire_waveform(oscope, chan, plot_graph=False):
     return times, voltages
 
 
-def test_circuit(oscope, vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, statistics=True):
+def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, statistics=True):
     """Take measurements for the voltages and frequencies specified.
     A frequency response is found for the results of this testing.
     This frequency response can be plotted by setting plot_freq_resp=True.
@@ -320,7 +320,11 @@ def test_circuit(oscope, vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, me
 
     # Set trigger level
     oscope_trigger_settings(oscope, chan1)
-    oscope_set_siggen(oscope, vin_PP[0],frequencies[0]) # Turn on the signal generator
+
+    if siggen != None:
+        siggen_set_siggen(siggen, vin_PP[0],frequencies[0])
+    else:
+        oscope_set_siggen(oscope, vin_PP[0],frequencies[0]) # Turn on the signal generator
 
     time.sleep(3) # Time for oscilloscope to set intial settings
 
@@ -332,10 +336,15 @@ def test_circuit(oscope, vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, me
  
     # Run tests
     for v in vin_PP:
-        command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
+        if siggen == None:
+            command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
         command(oscope, f"CHANnel1:RANGe {v*1.2}") # Adjust input channel to correctly read the input voltage
         for f in frequencies:
-            command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
+            print(v, f)
+            if siggen == None:
+                command(oscope, f":WGEN:FREQuency {f}") # Set the frequency
+            elif siggen != None:
+                siggen_set_siggen(siggen, v, f)
             command(oscope, f"TIMebase:RANGe {2/(f)}")
             auto_adjust_voltageaxis(oscope, chan2) # Readjust the output channel to correctly read output voltage
             # Take measurements and record data
@@ -369,7 +378,7 @@ def test_circuit(oscope, vin_PP, frequencies, chan1=1, chan2=2, meas_chan1=1, me
     return results_dict
 
 
-def characterise_filter(oscope, vin_PP=[1], freq_min=100, freq_max=100000, points_per_dec=10, cutoff_dB_val=-3, freq_resp_graph=True, statistics=True):
+def characterise_filter(oscope, siggen=None, vin_PP=[1], freq_min=100, freq_max=100000, points_per_dec=10, cutoff_dB_val=-3, freq_resp_graph=True, statistics=True):
     """Characterises a filter and reutrns whether the filter is high or low pass.
     By setting quick_sim=True, 4 points per decade are used instead of the standard 10 to speed up the process.
     A graph can be plotted by setting plot_graph=True when calling the function. 
@@ -381,7 +390,7 @@ def characterise_filter(oscope, vin_PP=[1], freq_min=100, freq_max=100000, point
 
 
     # Test circuit and find the frequency response
-    results = test_circuit(oscope, vin_PP, frequencies, statistics=statistics)
+    results = test_circuit(oscope, vin_PP, frequencies, siggen=siggen, statistics=statistics)
     freq_resp, freq_resp_dB, cutoff_freq = calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=cutoff_dB_val)
 
     # Calculates whether the filter is high or low pass
@@ -399,11 +408,20 @@ def characterise_filter(oscope, vin_PP=[1], freq_min=100, freq_max=100000, point
 
 
 # -------------------------------
-# RECORD MEASUREMENTS FROM THE OSCILLOSCOPE
+# SIGNAL GENERATOR FUNCTIONS
 # -------------------------------
 
-# Main
+def siggen_set_siggen(siggen, v, f, offset=0.0):
+    command(siggen, ":WGENerator:OUTPut:LOAD HIGHz")
+    command(siggen, ":WGEN:OUTPut ON")
+    command(siggen, f":WGEN:VOLTage {v}")
+    command(siggen, f":WGEN:VOLTage:OFFset {offset}")
+    command(siggen, f":WGEN:FREQuency {f}")
+    time.sleep(0.5) # to allow waveform to settle
 
+# -------------------------------
+# MAIN
+# -------------------------------
 if __name__ == "__main__":
     oscope = connect_instrument(oscilloscope1_string)
     mmeter = connect_instrument(multimeter1_string)

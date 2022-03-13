@@ -36,9 +36,9 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
 
     temp_freqs = []
     for i in point_maker:
-        if i*10**int(first_dec) > start_freq:
+        if i*10**int(first_dec) > start_freq and i*10**int(first_dec) < end_freq:
             temp_freqs.append(int(i*10**int(first_dec)))
-        if i*10**int(last_dec) < end_freq:
+        if i*10**int(last_dec) < end_freq and i*10**int(first_dec) > start_freq:
             temp_freqs.append(int(i*10**int(last_dec)))
     if start_freq not in temp_freqs:
         temp_freqs.append(start_freq)   
@@ -50,7 +50,8 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
     all_freqs=[]
     for i in freqs:
         for j in i:
-            all_freqs.append(j)
+            if j > start_freq or j < end_freq or j == start_freq or j == end_freq:
+                all_freqs.append(j)
 
     all_freqs = list(dict.fromkeys(all_freqs))
     all_freqs.sort()
