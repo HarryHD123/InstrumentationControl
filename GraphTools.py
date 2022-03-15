@@ -1,9 +1,9 @@
 from matplotlib import pyplot as plt
 import matplotlib.backends.backend_tkagg as agg
     
-def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False, cutoff_data = None):
+def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False, cutoff_data = None, size=(7,5)):
     
-    fig = plt.figure(figsize=(7, 5))
+    fig = plt.figure(figsize=size)
     plt.plot(data[0], data[1], color='b', linewidth=1.5)
     if log_graph:
         plt.semilogx()

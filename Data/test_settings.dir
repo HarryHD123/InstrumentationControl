@@ -1,5 +1,5 @@
 'voltages', (0, 5)
-'frequencies', (512, 14)
+'frequencies', (512, 38)
 'dc_offset', (1024, 5)
 'meas_type', (1536, 14)
 'cutoff(dB)', (2048, 8)
@@ -14,3 +14,4 @@
 'multimeter1_string', (6656, 43)
 'signalgenerator1_string', (7168, 43)
 'powersupply1_string', (7680, 43)
+'coupling', (8192, 12)

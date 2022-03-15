@@ -1,0 +1,6 @@
+'voltage', (0, 5)
+'frequency', (512, 6)
+'dc_offset', (1024, 5)
+'meas_type', (1536, 14)
+'coupling', (2048, 12)
+'wavetype', (2560, 14)

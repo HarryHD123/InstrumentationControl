@@ -1,4 +1,5 @@
 import math
+from pickle import TRUE
 import pyvisa
 import time
 import numpy as np
@@ -6,8 +7,6 @@ import matplotlib.pyplot as plt
 from DataManagement import *
 from GraphTools import plot_freq_resp
 import json
-import GUI_tk
-from importlib import reload
 
 rm = pyvisa.ResourceManager()
 oscope = None
@@ -42,13 +41,13 @@ def read(instrument, command):
 # SETUP FUNCTIONS SETTINGS
 # -----------------
 
-def connect_instrument(instrument_string):
+def connect_instrument(instrument_string, read_termination='\n', write_termination='\n'):
     instrument = None
     try:
         # adjust the VISA Resource string to fit your instrument
         instrument = rm.open_resource(instrument_string)
-        instrument.read_termination = '\n'  # Define the last line of an input to be a paragraph break
-        instrument.write_termination = '\n'  # Set the output (to the instrument) to be end with a paragraph break
+        instrument.read_termination = read_termination  # Define the last line of an input to be a paragraph break
+        instrument.write_termination = write_termination  # Set the output (to the instrument) to be end with a paragraph break
         instrument.baud_rate = 512  # Set buffer size to be 512
         instrument.visa_timeout = 10000  # Timeout for VISA Read Operations
         instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
@@ -133,19 +132,23 @@ def oscope_coupling(oscope, channel, coupling):
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling
 
 
-def oscope_trigger_settings(oscope, channel, trigger_level=0):
+def oscope_trigger_settings(oscope, channel, trigger_level=None):
     """Sets Trigger Settings."""
 
     command(oscope, "TRIG:A:MODE AUTO")  # Trigger Auto mode in case of no signal is applied
     command(oscope, "TRIG:A:TYPE EDGE;:TRIG:A:EDGE:SLOP POS")  # Trigger to a positive rising edge
-    command(oscope, f"TRIG:A:SOUR CH{channel}")  # Trigger source Channel set
-    command(oscope, f"TRIG:A:LEV{trigger_level}")  # Trigger level set
+    if trigger_level != None:
+        command(oscope, f"TRIG:A:SOUR CH{channel}")  # Trigger source Channel set
+        command(oscope, f"TRIG:A:LEV{trigger_level}")  # Trigger level set
+    else:
+        command(oscope, "TRIGger:A:FINDlevel")  # Trigger level set
 
 
-def oscope_set_siggen(oscope, v, f, offset=0.0):
+def oscope_set_siggen(oscope, v, f, offset=0.0, wave_type='SINE'):
 
     command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
     command(oscope, ":WGEN:OUTPut ON")
+    command(oscope, f":WGEN:FUNCtion {wave_type}")
     command(oscope, f":WGEN:VOLTage {v}")
     command(oscope, f":WGEN:VOLTage:OFFset {offset}")
     command(oscope, f":WGEN:FREQuency {f}")
@@ -173,14 +176,18 @@ def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
     vcheck = 80e-3
     while voltage > 10e+10: # If clipping zooms out until a reading can be taken
         command(oscope, f"CHANnel{chan}:RANGe {vcheck}")
+        oscope_trigger_settings(oscope, chan)
         voltage = read_measurement(oscope, meas_chan)
         vcheck *= 10
     voltage *= 1.2
     command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+    oscope_trigger_settings(oscope, chan)
     vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
-    if vcheck2 > 10e+10:
-        voltage *= 1.4
-    command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+    while vcheck2 > 10e+10:
+        voltage *= 1.2
+        oscope_trigger_settings(oscope, chan)
+        command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+        vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
 
 
 def auto_adjust(oscope, chan, meas_chan=4):
@@ -411,12 +418,19 @@ def characterise_filter(oscope, siggen=None, vin_PP=[1], freq_min=100, freq_max=
 # SIGNAL GENERATOR FUNCTIONS
 # -------------------------------
 
-def siggen_set_siggen(siggen, v, f, offset=0.0):
-    command(siggen, ":WGENerator:OUTPut:LOAD HIGHz")
-    command(siggen, ":WGEN:OUTPut ON")
-    command(siggen, f":WGEN:VOLTage {v}")
-    command(siggen, f":WGEN:VOLTage:OFFset {offset}")
-    command(siggen, f":WGEN:FREQuency {f}")
+def siggen_read_settings(siggen, chan=1):
+    settings = read(siggen, f'C{chan}: BaSic_WaVe?') 
+    
+    return settings
+
+def siggen_set_siggen(siggen, v, f, chan=1, offset=0.0, wave_type='SINE'):
+    command(siggen, "*RST")
+    command(siggen, f"C{chan}:BSWV WVTP, {wave_type}")
+    command(siggen, f"C{chan}:BSWV AMP, {v}")
+    command(siggen, f"C{chan}:BSWV OFST, {offset}")
+    command(siggen, f"C{chan}:BSWV FRQ, {f}")
+    command(siggen, f"C{chan}:OUTP ON")
+    command(siggen, f"C{chan}:OUTP LOAD, HZ")
     time.sleep(0.5) # to allow waveform to settle
 
 # -------------------------------
@@ -424,17 +438,20 @@ def siggen_set_siggen(siggen, v, f, offset=0.0):
 # -------------------------------
 if __name__ == "__main__":
     oscope = connect_instrument(oscilloscope1_string)
-    mmeter = connect_instrument(multimeter1_string)
-    psource = connect_instrument(powersupply1_string)
-    siggen = connect_instrument(signalgenerator1_string)
-    instruments = [oscope, mmeter, psource, siggen]
-
+    #mmeter = connect_instrument(multimeter1_string)
+    #psource = connect_instrument(powersupply1_string)
+    siggen = connect_instrument(signalgenerator1_string, read_termination="", write_termination="")
+    #instruments = [oscope, mmeter, psource, siggen]
+    instruments = [oscope, siggen]
     for instrument in instruments:
         try:
             req_info(instrument)
             print(f"Successfully connected to {instrument}")
         except Exception:
             print(f"Connection to {str(instrument)} failed")
+
+    siggen_set_siggen(siggen, 0.2, 10000, offset=1)
+    auto_adjust(oscope, 1)
     
 
 # Connect to Instruments
@@ -460,12 +477,12 @@ if __name__ == "__main__":
 # oscope_default_settings(2)
 
 # Set parameters
-Vin_PP = [0.4,1,5]
-Offset = 0.0
-Frequencies = [100,1000,10000,100000,1000000]
-Vin_PP = [5]
+# Vin_PP = [0.4,1,5]
+# Offset = 0.0
+# Frequencies = [100,1000,10000,100000,1000000]
+# Vin_PP = [5]
 
-Cutoff_dB_val = -3
+# Cutoff_dB_val = -3
 
 # Recieve user input
 #Input = open('testjson.json', 'r')
