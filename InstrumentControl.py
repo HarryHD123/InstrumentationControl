@@ -100,7 +100,8 @@ def oscope_default_settings(oscope, channel='1', acquisition_time = 0.01, horizo
     command(oscope, f"CHAN{channel}:COUP {coupling}L")  # Coupling DC 1MOhm
     command(oscope, f"CHAN{channel}:STAT ON")  # Switch Channel ON
     command(oscope, f"CHAN{channel}:TYPE HRES")  # Set to High Resolution
-    command(oscope, f'"PROB{channel}:SET:GAIN:MAN {probe_scale}')
+    command(oscope, f"CHANnel{channel}:BANDwidth B20") # Bandwidth limiting to 20MHz
+    command(oscope, f"PROB{channel}:SET:GAIN:MAN {probe_scale}")
 
 
 def oscope_channel_switch(oscope, channel, on_off):
@@ -145,7 +146,7 @@ def oscope_trigger_settings(oscope, channel, trigger_level=None):
 
 
 def oscope_set_siggen(oscope, v, f, offset=0.0, wave_type='SINE'):
-
+    """Sets the oscilloscope signal generator"""
     command(oscope, ":WGENerator:OUTPut:LOAD HIGHz")
     command(oscope, ":WGEN:OUTPut ON")
     command(oscope, f":WGEN:FUNCtion {wave_type}")
@@ -171,6 +172,7 @@ def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
     """Automatically adjusts the voltage axis."""
     
     # Voltage axis
+    oscope_offset(oscope, chan, 0)
     measurement_channel_setup(oscope, meas_chan, 'PEAK', chan)
     voltage = read_measurement(oscope, meas_chan)
     vcheck = 80e-3
@@ -193,6 +195,7 @@ def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
 def auto_adjust(oscope, chan, meas_chan=4):
     """Autoscales so the waveform always fits the screen"""
 
+    oscope_offset(oscope, chan, 0)
     auto_adjust_timeaxis(oscope, chan, meas_chan)
     auto_adjust_voltageaxis(oscope, chan, meas_chan)
 
@@ -216,7 +219,6 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
     if statistics:
         command(oscope, f"MEASurement{meas_chan}:STATistics:RESet")
         time.sleep(2) # Needed to statistics to be reset and some values taken
-        #command(oscope, f"MEASurement{meas_chan}:STATistics:VALue?")
         command(oscope, f"MEASurement{meas_chan}:RESult:AVG?")
     else:
         time.sleep(0.5) # Needed to allow the waveform to settle
@@ -318,6 +320,11 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
     This frequency response can be plotted by setting plot_freq_resp=True.
     A cutoff(dB) value can be found by setting cutoff=True. The cutoff value is set to -3dB by default, but can be changed by setting cutoff_dB_val equal to your specified value."""
     
+    # Reset equipment
+    oscope_preset(oscope)
+    oscope_default_settings(oscope, 1)
+    oscope_default_settings(oscope, 2)
+
     # Set up measurement channels
     measurement_channel_setup(oscope, meas_chan1, 'PEAK', chan1)
     measurement_channel_setup(oscope, meas_chan2, 'PEAK', chan2)
@@ -390,11 +397,10 @@ def characterise_filter(oscope, siggen=None, vin_PP=[1], freq_min=100, freq_max=
     By setting quick_sim=True, 4 points per decade are used instead of the standard 10 to speed up the process.
     A graph can be plotted by setting plot_graph=True when calling the function. 
     Interpolation is used to smooth the graph as standard when quick_sim is called.
-    The cutoff_3dB is added to the graph as a standard, calculated using Pchip Interpolation"""
+    The cutoff at 3dB is added to the graph as a standard found through interpolation."""
 
     # Calculate the frequencies to test along
     frequencies = points_list_maker(freq_min,freq_max,points_per_dec)
-
 
     # Test circuit and find the frequency response
     results = test_circuit(oscope, vin_PP, frequencies, siggen=siggen, statistics=statistics)
@@ -450,7 +456,8 @@ if __name__ == "__main__":
         except Exception:
             print(f"Connection to {str(instrument)} failed")
 
-    siggen_set_siggen(siggen, 0.2, 10000, offset=1)
+    siggen_set_siggen(siggen, 1, 1000, offset=0)
+    oscope_default_settings(oscope, 1)
     auto_adjust(oscope, 1)
     
 
