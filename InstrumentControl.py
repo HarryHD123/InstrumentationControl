@@ -1,6 +1,4 @@
-from audioop import avg
 import math
-from pickle import TRUE
 import pyvisa
 import time
 import numpy as np
@@ -95,7 +93,7 @@ def preset(instrument):
 # OSCILLOSCOPE COMMANDS
 # -------------------------------
 
-def oscope_default_settings(oscope, channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0', probe_scale='10'):
+def oscope_default_settings(oscope, channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0', probe_scale='0.1'):
     command(oscope, f"TIM:ACQT{acquisition_time}")  # 10ms Acquisition time
     command(oscope, f"CHAN{channel}:RANG {horizontal_range}")  # Horizontal range 5V (0.5V/div)
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset 0
@@ -124,9 +122,10 @@ def oscope_range(oscope, channel, horizontal_range):
 
 
 def oscope_offset(oscope, channel, offset):
-    """Sets the DC ofset level."""
+    """Sets the DC offset level."""
 
     command(oscope, f"CHAN{channel}:OFFS {offset}")  # Offset
+    time.sleep(0.1)
 
 
 def oscope_coupling(oscope, channel, coupling):
@@ -164,8 +163,21 @@ def auto_adjust_timeaxis(oscope, chan, meas_chan=4):
     # Time axis
     measurement_channel_setup(oscope, meas_chan, 'FREQ', chan)
     frequency = read_measurement(oscope, meas_chan)
-    while frequency > 10e+10: # If the frequnecy cannot be measured, adjusts the timebase until a frequency will be obtainable
-        command(oscope, f"TIMebase:RANGe 0.2")
+    freq_check = 0.2
+    count = 0
+    while frequency > 10e+10: # If the frequency cannot be measured, adjusts the timebase until a frequency will be obtainable
+        count+=1
+        command(oscope, f"TIMebase:RANGe {freq_check}")
+        oscope_trigger_settings(oscope, chan)
+        frequency = read_measurement(oscope, meas_chan)
+        freq_check /= 10
+        if count > 2:
+            auto_adjust_voltageaxis(oscope, chan)
+            measurement_channel_setup(oscope, meas_chan, 'FREQ', chan)
+            frequency = read_measurement(oscope, meas_chan)
+            command(oscope, f"TIMebase:RANGe {frequency}")
+    if count > 1:
+        print("HERE")
         frequency = read_measurement(oscope, meas_chan)
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
 
@@ -175,16 +187,28 @@ def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
     
     # Voltage axis
     oscope_offset(oscope, chan, 0)
+    oscope_trigger_settings(oscope, chan)
     measurement_channel_setup(oscope, meas_chan, 'PEAK', chan)
     voltage = read_measurement(oscope, meas_chan)
-    vcheck = 80e-3
+    vcheck = 80e-3 # max value
+    if voltage > 10e+10:
+        issue = 'big'
+    else:
+        issue = 'small'
+
     while voltage > 10e+10: # If clipping zooms out until a reading can be taken
         command(oscope, f"CHANnel{chan}:RANGe {vcheck}")
         oscope_trigger_settings(oscope, chan)
         voltage = read_measurement(oscope, meas_chan)
         vcheck *= 10
-    voltage *= 1.2
-    command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+    if issue == 'big':
+        voltage *= 1.2
+        command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+    
+    if issue == 'small':        
+        new_range = voltage/0.8
+        command(oscope, f"CHANnel{chan}:RANGe {new_range}")
+        
     oscope_trigger_settings(oscope, chan)
     vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
     while vcheck2 > 10e+10:
@@ -200,7 +224,7 @@ def auto_adjust(oscope, chan, meas_chan=4):
     oscope_offset(oscope, chan, 0)
     auto_adjust_timeaxis(oscope, chan, meas_chan)
     auto_adjust_voltageaxis(oscope, chan, meas_chan)
-
+    
 
 def measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1, source_chan_2=2):
     """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
@@ -522,11 +546,11 @@ def powers_chan_on(powers, chan=1):
 # -------------------------------
 if __name__ == "__main__":
     oscope = connect_instrument(oscilloscope1_string)
-    mmeter = connect_instrument(multimeter1_string)
-    powers = connect_instrument(powersupply1_string)
+    #mmeter = connect_instrument(multimeter1_string)
+    #powers = connect_instrument(powersupply1_string)
     #siggen = connect_instrument(signalgenerator1_string, read_termination="", write_termination="")
     #instruments = [oscope, mmeter, powers, siggen]
-    instruments = [oscope, mmeter, powers]
+    instruments = [oscope]
     for instrument in instruments:
         try:
             req_info(instrument)
@@ -534,12 +558,17 @@ if __name__ == "__main__":
         except Exception:
             print(f"Connection to {str(instrument)} failed")
 
+    #command(oscope, f"TIMebase:RANGe 0.002")
+    auto_adjust(oscope, 1)
+
+    #oscope_set_siggen(oscope, 1, 1000, offset=0)
+    #oscope_default_settings(oscope, 1)
+    #oscope_default_settings(oscope, 2)
 
     #powers_set_powers(powers, 2, 1, chan=3)
     #powers_chan_off(powers, 1)
     #powers_chan_off(powers, 3)
-    #oscope_set_siggen(oscope, 1, 1000, offset=0)
-    #oscope_default_settings(oscope, 1)
+    
     #auto_adjust(oscope, 1)
     #print("DC V", mmeter_get_voltage(mmeter))
     #print("AC V", mmeter_get_voltage(mmeter, AC_DC='AC'))
