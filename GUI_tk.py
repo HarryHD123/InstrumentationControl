@@ -1,6 +1,6 @@
 from tkinter import *
 import shelve
-from InstrumentControl import * #acquire_waveform, test_circuit, connect_instrument, oscope
+from InstrumentControl import *
 from DataManagement import *
 from GraphTools import EmbedGraph
 
@@ -9,7 +9,7 @@ class InstrumentationControlApp(Tk):
         Tk.__init__(self)
         self._frame = None
         self.oscope = None
-        self.siggen = True
+        self.siggen = None
         self.siggen_setting = None
         self.multim = None
         self.powers = None
@@ -62,7 +62,7 @@ class FreqRespMenu(Frame):
 
          # Set fontsize
         self.FONTSIZE = 15
-        self.FONTSIZE_LARGE = 30
+        self.FONTSIZE_LARGE = 25
 
         # Read inital settings
         self.ReadSettings()
@@ -105,8 +105,9 @@ class FreqRespMenu(Frame):
         self.radio_coupling_DC = Radiobutton (self, text = 'DC Coupling', variable=self.tk_coupling, value=1, command=lambda:[self.select_coupling()], font=('Helvetica', self.FONTSIZE))
         self.radio_coupling_AC = Radiobutton (self, text = 'AC Coupling', variable=self.tk_coupling, value=2, command=lambda:[self.select_coupling()], font=('Helvetica', self.FONTSIZE))
 
-        # Place buttons, labels and entries
+        # Place widgets
         self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
+        self.lbl_heading.place(relx=0.26, rely=0.07, anchor=CENTER)
 
         self.lbl_voltages.place(relx=0.1, rely=0.17, anchor=CENTER)
         self.entry_voltages.place(relx=0.2, rely=0.17, anchor=CENTER)
@@ -128,7 +129,6 @@ class FreqRespMenu(Frame):
         self.radio_coupling_DC.place(relx=0.12, rely=0.62, anchor=CENTER)
         self.radio_coupling_AC.place(relx=0.12, rely=0.66, anchor=CENTER)
         
-        self.lbl_heading.place(relx=0.26, rely=0.07, anchor=CENTER)
         self.btn_acquire_freqresp.place(relx=0.12, rely=0.75, anchor=CENTER)
         self.btn_reset.place(relx=0.12, rely=0.85, anchor=CENTER)
         self.lbl_connect_first.place(relx=0.13, rely=0.92, anchor=CENTER)       
@@ -140,15 +140,15 @@ class FreqRespMenu(Frame):
     def show_testing_label(self):
         self.lbl_connect_first["text"] = 'Testing circuit\nPlease wait'
 
-    def acquire_results(self, oscope):
-        self.results = test_circuit(oscope, [self.voltages], self.frequencies)
+    def acquire_results(self, oscope, siggen=None):
+        self.results = test_circuit(oscope, [self.voltages], self.frequencies, siggen=siggen)
         self.lbl_connect_first["text"] = ""
 
     def update_freq_resp_plot(self):
         print(self.results)
         self.freq_resp, self.freq_resp_dB, self.cutoff_freq = calc_freq_response(self.results, [self.voltages], self.frequencies, self.cutoff_dB)
-        self.freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq])
-        self.freq_resp_plot.place(relx=0.75, rely=0.65, anchor=CENTER)
+        self.freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq], size = (11,6.8))
+        self.freq_resp_plot.place(relx=0.62, rely=0.55, anchor=CENTER)
 
     def check_freq_response_calc(self, button):
         """Changes the state of the frequency response button"""
@@ -206,13 +206,12 @@ class FreqRespMenu(Frame):
         else:
             return False          
 
-    def callback_num_neg(self, input, neg=True):
+    def callback_num_neg(self, input):
         """Only numeric input allowed (including negative numbers)"""
         if input.isnumeric() or input == '' or input.replace(".", '', 1).isnumeric():
             return True
-        if neg:
-            if input.startswith("-") and (input[1:].isnumeric() or input[1:]=='' or input[1:].replace(".", '').isnumeric()):
-                return True
+        elif input.startswith("-") and (input[1:].isnumeric() or input[1:]=='' or input[2:].replace(".", '').isnumeric()):
+            return True
         else:
             return False  
 
@@ -286,13 +285,14 @@ class OscilloscopeMenu(Frame):
         # Allow frame to be set
         Frame.__init__(self, master)
 
-         # Set fontsize
+        # Set fontsize
         self.FONTSIZE = 15
-        self.FONTSIZE_LARGE = 30
+        self.FONTSIZE_LARGE = 25
 
         # Read and set inital settings
         self.ReadSettings()
         self.wavetype_options = ['Sine', 'Square', 'DC']
+        self.chan_options = [1, 2, 3, 4]
 
         # Create text Variables
         self.tk_voltage = StringVar(self, self.voltage)
@@ -301,6 +301,8 @@ class OscilloscopeMenu(Frame):
         self.tk_siggen_selected = IntVar(self, self.detect_siggen(master))
         self.tk_coupling = IntVar(self, self.detect_coupling())
         self.tk_wavetype = StringVar(self, self.wavetype)
+        self.tk_chan1 = StringVar(self, self.chan1)
+        self.tk_chan2 = StringVar(self, self.chan2)
 
         # Create buttons and labels
         self.btn_home = Button (self, command=lambda: [self.entry_update_values(), master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', self.FONTSIZE))
@@ -311,11 +313,10 @@ class OscilloscopeMenu(Frame):
         self.lbl_wavetype = Label (self, text='Wave type', font=('Helvetica', self.FONTSIZE))
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from\nthe connections menu to acquire waveform', fg='red', font=('Helvetica', 10))
         self.lbl_testing = Label (self, text='Loading oscilloscope screen\nPlease wait', font=('Helvetica', 10))
-        self.btn_choose_siggen = Button (self, state=self.check_siggen_connection(master), command=lambda:[self.select_siggen(master)], text = self.detect_siggen(master), font=('Helvetica', self.FONTSIZE))
         self.btn_set_siggen = Button (self, state=self.check_connections(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.set_siggen(master.siggen, self.voltage, self.frequency, self.dc_offset, wave_type=self.detect_wavetype())], text = 'Set Signal Generator', height=2, width=18, font=('Helvetica', self.FONTSIZE))
-        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.update_live_graph(master.oscope)], text = 'Acquire Waveforms', height=2, width=16, font=('Helvetica', self.FONTSIZE))
+        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2))], text = 'Acquire Waveforms', height=2, width=16, font=('Helvetica', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(OscilloscopeMenu)], text = 'RESET', font=('Helvetica', self.FONTSIZE), fg = 'red')
-
+        
         # Create entries and radio buttons
         vcmd = self.register(self.callback_num)
         vcmd_neg = self.register(self.callback_num_neg)
@@ -327,9 +328,12 @@ class OscilloscopeMenu(Frame):
         self.radio_coupling_DC = Radiobutton (self, text = 'DC Coupling', variable=self.tk_coupling, value=1, command=lambda:[self.select_coupling()], font=('Helvetica', self.FONTSIZE))
         self.radio_coupling_AC = Radiobutton (self, text = 'AC Coupling', variable=self.tk_coupling, value=2, command=lambda:[self.select_coupling()], font=('Helvetica', self.FONTSIZE))
         self.drop_wavetype = OptionMenu (self, self.tk_wavetype, *self.wavetype_options)
+        self.drop_graph1 = OptionMenu (self, self.tk_chan1, *self.chan_options)
+        self.drop_graph2 = OptionMenu (self, self.tk_chan2, *self.chan_options)
 
-        # Place buttons, labels and entries
+        # Place widgets
         self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
+        self.lbl_heading.place(relx=0.24, rely=0.07, anchor=CENTER)
 
         self.lbl_voltage.place(relx=0.1, rely=0.17, anchor=CENTER)
         self.entry_voltage.place(relx=0.2, rely=0.17, anchor=CENTER)
@@ -346,8 +350,10 @@ class OscilloscopeMenu(Frame):
 
         self.radio_coupling_DC.place(relx=0.55, rely=0.17, anchor=CENTER)
         self.radio_coupling_AC.place(relx=0.55, rely=0.22, anchor=CENTER)
+
+        self.drop_graph1.place(relx=0.25, rely=0.28, anchor=CENTER)
+        self.drop_graph2.place(relx=0.75, rely=0.28, anchor=CENTER)
         
-        self.lbl_heading.place(relx=0.24, rely=0.07, anchor=CENTER)
         self.btn_acquire_waveform.place(relx=0.67, rely=0.19, anchor=CENTER)
         self.btn_reset.place(relx=0.92, rely=0.19, anchor=CENTER)
         self.btn_set_siggen.place(relx=0.81, rely=0.19, anchor=CENTER)
@@ -366,11 +372,12 @@ class OscilloscopeMenu(Frame):
     def show_testing_label(self):
         self.lbl_connect_first["text"] = 'Testing circuit\nPlease wait'
 
-    def update_live_graph(self, oscope):
-        times, voltages = acquire_waveform(oscope, 1)
+    def update_live_graph(self, oscope, chan1=1, chan2=2):
+        print(chan1, chan2)
+        times, voltages = acquire_waveform(oscope, chan1)
         self.live_plot = EmbedGraph((times,voltages), heading='Current Waveform Channel 1', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5.5))
         self.live_plot.place(relx=0.75, rely=0.65, anchor=CENTER)
-        times2, voltages2 = acquire_waveform(oscope, 2)
+        times2, voltages2 = acquire_waveform(oscope, chan2)
         self.live_plot2 = EmbedGraph((times2,voltages2), heading='Current Waveform Channel 2', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5.5))
         self.live_plot2.place(relx=0.75, rely=0.65, anchor=CENTER)
 
@@ -444,6 +451,12 @@ class OscilloscopeMenu(Frame):
             elif self.wavetype == 'DC':
                 return 'DC'
 
+    def detect_graph(self, graph_no):
+        if graph_no == 1:
+            return self.tk_chan1.get()
+        elif graph_no == 2:
+            return self.tk_chan2.get()
+
     # Call backs to check data entry
     def callback_num(self, input):
         """Only numeric input allowed"""
@@ -452,13 +465,12 @@ class OscilloscopeMenu(Frame):
         else:
             return False          
 
-    def callback_num_neg(self, input, neg=True):
+    def callback_num_neg(self, input):
         """Only numeric input allowed (including negative numbers)"""
         if input.isnumeric() or input == '' or input.replace(".", '', 1).isnumeric():
             return True
-        if neg:
-            if input.startswith("-") and (input[1:].isnumeric() or input[1:]=='' or input[1:].replace(".", '').isnumeric()):
-                return True
+        elif input.startswith("-") and (input[1:].isnumeric() or input[1:] == '' or input[1:].replace(".", '').isnumeric()):
+            return True
         else:
             return False  
 
@@ -478,6 +490,8 @@ class OscilloscopeMenu(Frame):
         self.frequency = self.convert_num(self.entry_frequency.get())
         self.dc_offset = self.convert_num(self.entry_offset.get())
         self.wavetype = self.tk_wavetype.get()
+        self.chan1 = self.tk_chan1.get()
+        self.chan2 = self.tk_chan2.get()
         self.WriteSettings()
         
     def WriteSettings(self):
@@ -488,6 +502,8 @@ class OscilloscopeMenu(Frame):
         test_settings_file["dc_offset"] = self.dc_offset
         test_settings_file["coupling"] = self.coupling
         test_settings_file["wavetype"] = self.wavetype
+        test_settings_file["graph1"] = self.chan1
+        test_settings_file["graph2"] = self.chan2
         test_settings_file.close()
 
     def ReadSettings(self):
@@ -498,6 +514,8 @@ class OscilloscopeMenu(Frame):
         self.dc_offset = test_settings_file["dc_offset"]
         self.coupling = test_settings_file["coupling"]
         self.wavetype = test_settings_file["wavetype"]
+        self.chan1 = test_settings_file["graph1"]
+        self.chan2 = test_settings_file["graph2"]
         test_settings_file.close()
 
     def Reset(self):
@@ -507,6 +525,8 @@ class OscilloscopeMenu(Frame):
         self.dc_offset = 0
         self.coupling = 'DC'
         self.wavetype = 'Sine'
+        self.chan1 = 1
+        self.chan2 = 2
         self.WriteSettings()
 
 class ConnectionMenu(Frame):
@@ -517,7 +537,7 @@ class ConnectionMenu(Frame):
 
         # Set fontsize
         self.FONTSIZE = 20
-        self.FONTSIZE_LARGE = 30
+        self.FONTSIZE_LARGE = 25
 
         # Read Initial Settings
         self.ReadSettings_Connect()
@@ -529,7 +549,7 @@ class ConnectionMenu(Frame):
         self.tk_powers = StringVar(self, self.powersupply1_string)
 
         # Create buttons and labels
-        self.btn_home = Button (self, command=lambda: [self.entry_update_connections(), master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', self.FONTSIZE))
+        self.btn_home = Button (self, command=lambda: [self.entry_update_connections(), master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', 15))
         self.lbl_heading = Label (self, text='Connections Menu', font=('Helvetica', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
         self.lbl_oscope = Label (self, text='Oscilloscope:', font=('Helvetica', self.FONTSIZE))
         self.lbl_siggen = Label (self, text='Signal Generator:', font=('Helvetica', self.FONTSIZE))
@@ -634,14 +654,34 @@ class ConnectionMenu(Frame):
         self.powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'
         self.WriteSettings_Connect()
 
-class DemoMenu(Frame):   
+class DemoMenu(Frame):
     def __init__(self, master):
 
         # Allow frame to be set
         Frame.__init__(self, master)
 
-        self.FONTSIZE = 20
-        self.FONTSIZE_LARGE = 30
+        # Set fontsize
+        self.FONTSIZE = 15
+        self.FONTSIZE_LARGE = 25
+
+        # Create buttons and labels
+        self.btn_home = Button (self, command=lambda: [master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', self.FONTSIZE))
+        self.lbl_heading = Label (self, text='Op Amp Demo', font=('Helvetica', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
+
+        # Place widgets
+        self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)        
+        self.lbl_heading.place(relx=0.24, rely=0.07, anchor=CENTER)
+
+        """
+        power supply on +10, -10V
+        check ps with multim
+        calc predicted gain
+        siggen on, calc acc gain from input output, 0.5V
+        increase input voltage so gain too big
+        e.g. 1.5V
+        increase power supply and show gain increase
+        then increase voltage again and see gain max out
+        """
 
 if __name__ == "__main__":
     app = InstrumentationControlApp()

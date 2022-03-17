@@ -2,14 +2,16 @@ from matplotlib import pyplot as plt
 import matplotlib.backends.backend_tkagg as agg
     
 def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False, cutoff_data = None, size=(7,5)):
-    
+    """Plots a graph embedded into a Tkinter frame"""
+
     fig = plt.figure(figsize=size)
     plt.plot(data[0], data[1], color='b', linewidth=1.5)
     if log_graph:
         plt.semilogx()
     if cutoff_data != None:
-        plt.annotate(f'{cutoff_data[0]}dB Cutoff:{cutoff_data[1]:.0f}Hz', xy=[cutoff_data[1],cutoff_data[0]], xytext=(7, 0), textcoords=('offset points'))
-        plt.plot(cutoff_data[1], cutoff_data[0], color='r', marker='x', markersize='10')
+        if cutoff_data[1] != None:
+            plt.annotate(f'{cutoff_data[0]}dB Cutoff:{cutoff_data[1]:.0f}Hz', xy=[cutoff_data[1],cutoff_data[0]], xytext=(7, 0), textcoords=('offset points'))
+            plt.plot(cutoff_data[1], cutoff_data[0], color='r', marker='x', markersize='10')
     plt.rc('axes', labelsize=10) #fontsize of the x and y labels)
     plt.ylabel(f'{y_label}')
     plt.xlabel(f'{x_label}')
