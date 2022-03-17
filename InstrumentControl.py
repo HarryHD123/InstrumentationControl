@@ -1,3 +1,4 @@
+from audioop import avg
 import math
 from pickle import TRUE
 import pyvisa
@@ -70,9 +71,9 @@ def connect_all_instruments(oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::
     
     oscope = connect_instrument(oscilloscope1_string)
     mmeter = connect_instrument(multimeter1_string)
-    psource = connect_instrument(powersupply1_string)
+    powers = connect_instrument(powersupply1_string)
     siggen = connect_instrument(signalgenerator1_string)
-    instruments = [oscope, mmeter, psource, siggen]
+    instruments = [oscope, mmeter, powers, siggen]
 
     for instrument in instruments:
         try:
@@ -81,17 +82,18 @@ def connect_all_instruments(oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::
         except Exception:
             print(f"Connection to {str(instrument)} failed")
 
-    return oscope, mmeter, psource, siggen
+    return oscope, mmeter, powers, siggen
+
+
+def preset(instrument):
+    "Resets an instrument"
+    command(instrument, '*DCL') # *DCL clears status registers
+    command(instrument, '*CLS') # *CLS clears output queue
+    command(instrument, '*RST') # *RST resets the instrument
+
 # -------------------------------
 # OSCILLOSCOPE COMMANDS
 # -------------------------------
-
-def oscope_preset(oscope):
-    "Resets the oscilloscope"
-    command(oscope, '*DCL') # *DCL clears status registers
-    command(oscope, '*CLS') # *CLS clears output queue
-    command(oscope, '*RST') # *RST resets the scope
-
 
 def oscope_default_settings(oscope, channel='1', acquisition_time = 0.01, horizontal_range='5.0', coupling='DC', offset='0.0', probe_scale='10'):
     command(oscope, f"TIM:ACQT{acquisition_time}")  # 10ms Acquisition time
@@ -321,7 +323,7 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
     A cutoff(dB) value can be found by setting cutoff=True. The cutoff value is set to -3dB by default, but can be changed by setting cutoff_dB_val equal to your specified value."""
     
     # Reset equipment
-    oscope_preset(oscope)
+    preset(oscope)
     oscope_default_settings(oscope, 1)
     oscope_default_settings(oscope, 2)
 
@@ -429,6 +431,7 @@ def siggen_read_settings(siggen, chan=1):
     
     return settings
 
+
 def siggen_set_siggen(siggen, v, f, chan=1, offset=0.0, wave_type='SINE'):
     command(siggen, "*RST")
     command(siggen, f"C{chan}:BSWV WVTP, {wave_type}")
@@ -440,15 +443,90 @@ def siggen_set_siggen(siggen, v, f, chan=1, offset=0.0, wave_type='SINE'):
     time.sleep(0.5) # to allow waveform to settle
 
 # -------------------------------
+# MULTIMETER FUNCTIONS
+# -------------------------------
+
+def mmeter_get_voltage(mmeter, AC_DC='DC'):
+    """Returns the voltage measured by the multimeter"""
+    if AC_DC == 'DC':
+        command(mmeter, "MEASure:VOLTage:DC?")
+    elif AC_DC == 'AC':
+        command(mmeter, "MEASure:VOLTage:AC?")
+        time.sleep(0.5) # AC takes longer to settle
+        command(mmeter, "MEASure:VOLTage:AC?")
+    time.sleep(0.2) # Wait for data to settle
+    V = mmeter.read()
+
+    return V
+
+
+def mmeter_get_resistance(mmeter):
+    """Returns the resistance measured by the multimeter"""
+    command(mmeter, "MEASure:RESistance?")
+    time.sleep(0.2) # Wait for data to settle
+    Res = mmeter.read()
+
+    return Res
+
+
+def mmeter_get_current(mmeter, AC_DC='DC'):
+    """Returns the current measured by the multimeter"""
+    if AC_DC == 'DC':
+        command(mmeter, "MEASure:CURRent:DC?")
+    elif AC_DC == 'AC':
+        command(mmeter, "MEASure:CURRent:AC?")
+        time.sleep(0.5) # AC takes longer to settle
+        command(mmeter, "MEASure:CURRent:AC?")
+    time.sleep(0.2) # Wait for data to settle
+    I = mmeter.read()
+
+    return I
+
+
+def mmeter_get_capacitance(mmeter):
+    """Returns the capacitance measured by the multimeter"""
+    command(mmeter, "MEASure:CAPacitance?")
+    time.sleep(0.2) # Wait for data to settle
+    Cap = mmeter.read()
+
+    return Cap
+
+# -------------------------------
+# POWER SUPPLY FUNCTIONS
+# -------------------------------
+
+def powers_set_powers(powers, v, I, chan=1):
+    """Turns on and sets a powers supply channel"""
+
+    command(powers, f"INSTrument:NSELect {chan}")
+    command(powers, "OUTP ON")
+    command(powers, "CURR {I}")
+    command(powers, "VOLT {v}")
+
+
+def powers_chan_off(powers, chan=1):
+    """Turns off a power supply channel"""
+
+    command(powers, f"INSTrument:NSELect {chan}")
+    command(powers, "OUTP OFF")
+
+
+def powers_chan_on(powers, chan=1):
+    """Turns on a power supply channel"""
+
+    command(powers, f"INSTrument:NSELect {chan}")
+    command(powers, "OUTP ON")
+
+# -------------------------------
 # MAIN
 # -------------------------------
 if __name__ == "__main__":
     oscope = connect_instrument(oscilloscope1_string)
-    #mmeter = connect_instrument(multimeter1_string)
-    #psource = connect_instrument(powersupply1_string)
-    siggen = connect_instrument(signalgenerator1_string, read_termination="", write_termination="")
-    #instruments = [oscope, mmeter, psource, siggen]
-    instruments = [oscope, siggen]
+    mmeter = connect_instrument(multimeter1_string)
+    powers = connect_instrument(powersupply1_string)
+    #siggen = connect_instrument(signalgenerator1_string, read_termination="", write_termination="")
+    #instruments = [oscope, mmeter, powers, siggen]
+    instruments = [oscope, mmeter, powers]
     for instrument in instruments:
         try:
             req_info(instrument)
@@ -456,64 +534,16 @@ if __name__ == "__main__":
         except Exception:
             print(f"Connection to {str(instrument)} failed")
 
-    siggen_set_siggen(siggen, 1, 1000, offset=0)
-    oscope_default_settings(oscope, 1)
-    auto_adjust(oscope, 1)
-    
 
-# Connect to Instruments
-# quick = 1
-# oscope = connect_instrument(oscilloscope1_string)
-# instruments = [oscope]
-# if quick == 0:
-#     mmeter = connect_instrument(multimeter1_string)
-#     psource = connect_instrument(powersupply1_string)
-#     siggen = connect_instrument(signalgenerator1_string)
-#     instruments = [oscope, mmeter, psource, siggen]
-
-# for instrument in instruments:
-#     try:
-#         req_info(instrument)
-#         print(f"Successfully connected to {instrument}")
-#     except Exception:
-#         print(f"Connection to {str(instrument)} failed")
-
-# # Set up oscilloscope
-# oscope_preset()
-# oscope_default_settings(1)
-# oscope_default_settings(2)
-
-# Set parameters
-# Vin_PP = [0.4,1,5]
-# Offset = 0.0
-# Frequencies = [100,1000,10000,100000,1000000]
-# Vin_PP = [5]
-
-# Cutoff_dB_val = -3
-
-# Recieve user input
-#Input = open('testjson.json', 'r')
-#Data = json.loads(Input.read())
-#Vin_PP = [Data['voltage_AC_amplitude']]
-#Offset = [Data['voltage_DC']]
-#Frequencies = [int(Data['voltage_AC_frequency_from']), int(Data['voltage_AC_frequency_to'])]
-#Input.close()
-#print(Vin_PP, Offset, Frequencies)
-
-# Test circuit at specified voltages and frequencies and calculate the frequency response
-#Results = test_circuit(Vin_PP, Frequencies)
-#Freq_resp, Freq_resp_dB, Cutoff_freq = calc_freq_response(Results, Vin_PP, Frequencies, cutoff_dB_val=Cutoff_dB_val)
-
-# Plot the frequency response
-#plot_freq_resp(Frequencies, Freq_resp_dB, Cutoff_dB_val, Cutoff_freq)
-
-#print("Results", Results)
-#print("Freqresp_dB", Freq_resp_dB)
-#print("Cutoff", Cutoff_freq)
-
-# Characterise filter
-#Filter_Type = characterise_filter(statistics=False)
-
-# Acquire waveform
-#oscope_set_siggen(3,20000)
-#Times, Voltages = acquire_waveform(2)
+    #powers_set_powers(powers, 2, 1, chan=3)
+    #powers_chan_off(powers, 1)
+    #powers_chan_off(powers, 3)
+    #oscope_set_siggen(oscope, 1, 1000, offset=0)
+    #oscope_default_settings(oscope, 1)
+    #auto_adjust(oscope, 1)
+    #print("DC V", mmeter_get_voltage(mmeter))
+    #print("AC V", mmeter_get_voltage(mmeter, AC_DC='AC'))
+    #print("DC I", mmeter_get_current(mmeter))
+    #print("AC I", mmeter_get_current(mmeter, AC_DC='AC'))
+    #print("Omega", mmeter_get_resistance(mmeter))
+    #print("Cap", mmeter_get_capacitance(mmeter))
