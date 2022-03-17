@@ -139,7 +139,7 @@ class FreqRespMenu(Frame):
 
     def show_testing_label(self):
         self.lbl_testing["text"] = 'Testing circuit\nPlease wait'
-        self.lbl_testing.place(relx=0.13, rely=0.92, anchor=CENTER)
+        self.lbl_testing.place(relx=0.12, rely=0.92, anchor=CENTER)
 
     def acquire_results(self, oscope, siggen=None):
         self.results = test_circuit(oscope, [self.voltages], self.frequencies, siggen=siggen)
@@ -572,6 +572,7 @@ class ConnectionMenu(Frame):
 
         # Place buttons, labels and entries
         self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
+        self.lbl_heading.place(relx=0.24, rely=0.07, anchor=CENTER)
 
         self.lbl_oscope.place(relx=0.1, rely=0.2, anchor=CENTER)
         self.entry_oscope.place(relx=0.3, rely=0.2, anchor=CENTER)
@@ -587,7 +588,6 @@ class ConnectionMenu(Frame):
         self.lbl_multim_connect.place(relx=0.5, rely=0.4, anchor=CENTER)
         self.lbl_powers_connect.place(relx=0.5, rely=0.5, anchor=CENTER)
 
-        self.lbl_heading.place(relx=0.25, rely=0.07, anchor=CENTER)
         self.btn_connect_all.place(relx=0.5, rely=0.7, anchor=CENTER)
         self.btn_reset.place(relx=0.1, rely=0.7, anchor=CENTER)
 

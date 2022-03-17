@@ -191,23 +191,15 @@ def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
     measurement_channel_setup(oscope, meas_chan, 'PEAK', chan)
     voltage = read_measurement(oscope, meas_chan)
     vcheck = 80e-3 # max value
-    if voltage > 10e+10:
-        issue = 'big'
-    else:
-        issue = 'small'
 
     while voltage > 10e+10: # If clipping zooms out until a reading can be taken
         command(oscope, f"CHANnel{chan}:RANGe {vcheck}")
         oscope_trigger_settings(oscope, chan)
         voltage = read_measurement(oscope, meas_chan)
         vcheck *= 10
-    if issue == 'big':
-        voltage *= 1.2
-        command(oscope, f"CHANnel{chan}:RANGe {voltage}")
-    
-    if issue == 'small':        
-        new_range = voltage/0.8
-        command(oscope, f"CHANnel{chan}:RANGe {new_range}")
+
+    new_range = voltage/0.8
+    command(oscope, f"CHANnel{chan}:RANGe {new_range}")
         
     oscope_trigger_settings(oscope, chan)
     vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
@@ -244,7 +236,7 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
 
     if statistics:
         command(oscope, f"MEASurement{meas_chan}:STATistics:RESet")
-        time.sleep(2) # Needed to statistics to be reset and some values taken
+        time.sleep(1) # Needed for statistics to be reset and some values taken
         command(oscope, f"MEASurement{meas_chan}:RESult:AVG?")
     else:
         time.sleep(0.5) # Needed to allow the waveform to settle
@@ -253,7 +245,7 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
         else:
             command(oscope, f"MEASurement{meas_chan}:RESult:{meas_type}?")        
 
-    time.sleep(0.75) # Time for the oscilloscope to load the result
+    time.sleep(1) # Time for the oscilloscope to load the result
     value_string = oscope.read()
     value = float(value_string)
 
@@ -340,7 +332,7 @@ def acquire_waveform(oscope, chan, plot_graph=False):
     return times, voltages
 
 
-def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, statistics=True):
+def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, meas_chan4=4, statistics=True):
     """Take measurements for the voltages and frequencies specified.
     A frequency response is found for the results of this testing.
     This frequency response can be plotted by setting plot_freq_resp=True.
@@ -355,6 +347,7 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
     measurement_channel_setup(oscope, meas_chan1, 'PEAK', chan1)
     measurement_channel_setup(oscope, meas_chan2, 'PEAK', chan2)
     measurement_channel_setup(oscope, meas_chan3, 'PHASe', chan1, chan2)
+    measurement_channel_setup(oscope, meas_chan4, 'PEAK', chan1)
     if statistics:
         command(oscope, "MEASurement:STATistics ON")
 
@@ -386,6 +379,7 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
             elif siggen != None:
                 siggen_set_siggen(siggen, v, f)
             command(oscope, f"TIMebase:RANGe {2/(f)}")
+            time.sleep(1.2) # time for the change of timebase to come into effect
             auto_adjust_voltageaxis(oscope, chan2) # Readjust the output channel to correctly read output voltage
             # Take measurements and record data
             v_in = read_measurement(oscope, meas_chan1, statistics=statistics)
@@ -559,7 +553,7 @@ if __name__ == "__main__":
             print(f"Connection to {str(instrument)} failed")
 
     #command(oscope, f"TIMebase:RANGe 0.002")
-    auto_adjust(oscope, 1)
+    auto_adjust(oscope, 2)
 
     #oscope_set_siggen(oscope, 1, 1000, offset=0)
     #oscope_default_settings(oscope, 1)
