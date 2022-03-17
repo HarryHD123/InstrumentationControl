@@ -4,3 +4,5 @@
 'meas_type', (1536, 14)
 'coupling', (2048, 12)
 'wavetype', (2560, 14)
+'graph1', (3072, 11)
+'graph2', (3584, 11)
