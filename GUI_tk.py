@@ -87,7 +87,7 @@ class FreqRespMenu(Frame):
         self.lbl_offset = Label (self, text='DC Offset (V)', font=('Helvetica', self.FONTSIZE))
         self.lbl_cutoff = Label (self, text='Cutoff (dB)', font=('Helvetica', self.FONTSIZE))
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from the connections\nmenuto measure the frequency response', fg='red', font=('Helvetica', 10))
-        self.lbl_testing = Label (self, text='Testing circuit\nPlease wait', font=('Helvetica', 10))
+        self.lbl_testing = Label (self, text='Testing circuit\nPlease wait', fg='red', font=('Helvetica', 10))
         self.btn_acquire_freqresp = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.acquire_results(master.oscope, siggen=master.siggen_setting), self.check_freq_response_calc(self.btn_acquire_freqresp), self.update_freq_resp_plot()], text = 'Measure\nFrequency Response', height=2, width=17, font=('Helvetica', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(FreqRespMenu)], text = 'RESET', font=('Helvetica', self.FONTSIZE), fg = 'red')
 
@@ -138,14 +138,14 @@ class FreqRespMenu(Frame):
         self.freq_resp_plot.place(relx=0.62, rely=0.55, anchor=CENTER)
 
     def show_testing_label(self):
-        self.lbl_connect_first["text"] = 'Testing circuit\nPlease wait'
+        self.lbl_testing["text"] = 'Testing circuit\nPlease wait'
+        self.lbl_testing.place(relx=0.13, rely=0.92, anchor=CENTER)
 
     def acquire_results(self, oscope, siggen=None):
         self.results = test_circuit(oscope, [self.voltages], self.frequencies, siggen=siggen)
-        self.lbl_connect_first["text"] = ""
+        self.lbl_testing["text"] = ""
 
     def update_freq_resp_plot(self):
-        print(self.results)
         self.freq_resp, self.freq_resp_dB, self.cutoff_freq = calc_freq_response(self.results, [self.voltages], self.frequencies, self.cutoff_dB)
         self.freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq], size = (11,6.8))
         self.freq_resp_plot.place(relx=0.62, rely=0.55, anchor=CENTER)
@@ -313,8 +313,8 @@ class OscilloscopeMenu(Frame):
         self.lbl_wavetype = Label (self, text='Wave type', font=('Helvetica', self.FONTSIZE))
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from\nthe connections menu to acquire waveform', fg='red', font=('Helvetica', 10))
         self.lbl_testing = Label (self, text='Loading oscilloscope screen\nPlease wait', font=('Helvetica', 10))
-        self.btn_set_siggen = Button (self, state=self.check_connections(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.set_siggen(master.siggen, self.voltage, self.frequency, self.dc_offset, wave_type=self.detect_wavetype())], text = 'Set Signal Generator', height=2, width=18, font=('Helvetica', self.FONTSIZE))
-        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2))], text = 'Acquire Waveforms', height=2, width=16, font=('Helvetica', self.FONTSIZE))
+        self.btn_set_siggen = Button (self, state=self.check_connections(master), command=lambda:[self.entry_update_values(), self.set_siggen(master, self.voltage, self.frequency, self.dc_offset, wave_type=self.detect_wavetype())], text = 'Set Signal Generator', height=2, width=18, font=('Helvetica', self.FONTSIZE))
+        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.show_testing_label(), self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2))], text = 'Acquire Waveforms', height=2, width=16, font=('Helvetica', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(OscilloscopeMenu)], text = 'RESET', font=('Helvetica', self.FONTSIZE), fg = 'red')
         
         # Create entries and radio buttons
@@ -370,16 +370,17 @@ class OscilloscopeMenu(Frame):
         self.live_plot2.place(relx=0.75, rely=0.65, anchor=CENTER)
 
     def show_testing_label(self):
-        self.lbl_connect_first["text"] = 'Testing circuit\nPlease wait'
+        self.lbl_connect_first["text"] = 'Acquiring waveforms\nPlease wait'
 
     def update_live_graph(self, oscope, chan1=1, chan2=2):
         print(chan1, chan2)
         times, voltages = acquire_waveform(oscope, chan1)
         self.live_plot = EmbedGraph((times,voltages), heading='Current Waveform Channel 1', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5.5))
-        self.live_plot.place(relx=0.75, rely=0.65, anchor=CENTER)
+        self.live_plot.place(relx=0.25, rely=0.65, anchor=CENTER)
         times2, voltages2 = acquire_waveform(oscope, chan2)
         self.live_plot2 = EmbedGraph((times2,voltages2), heading='Current Waveform Channel 2', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5.5))
         self.live_plot2.place(relx=0.75, rely=0.65, anchor=CENTER)
+        self.lbl_connect_first["text"] = ''
 
     def set_siggen(self, master, voltage, frequency, offset, wave_type):
         if master.siggen_setting == None:
