@@ -1,4 +1,5 @@
 import math
+import copy
 from numpy import linspace
 from scipy.interpolate import PchipInterpolator, interp1d
 
@@ -8,6 +9,7 @@ def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
     freq_resp = []
     freq_resp_dB = []
     retest_f = []
+    print("ALL F", frequencies)
     for f in frequencies:
         gainlist = []
         for v in vin_PP:
@@ -17,15 +19,42 @@ def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
         freq_resp_dB.append(20*(math.log10(gain_avg)).real)
         retest_f.append(data_verification(freq_resp_dB, f))
 
-    cutoff_interp = interp1d(freq_resp_dB, frequencies, assume_sorted=False)
+    print("RETEST LIST:", retest_f)
+    freq_resp_verify = copy.deepcopy(freq_resp)
+    freq_resp_dB_verify = copy.deepcopy(freq_resp_dB)
+    frequencies_verify = copy.deepcopy(frequencies)
+    unwanted_freqs = []
+    for f in retest_f:
+        if f != None:
+            unwanted_freqs.append(frequencies.index(f))
+    
+    for f in sorted(unwanted_freqs, reverse = True):
+        del freq_resp_verify[f]
+        del freq_resp_dB_verify[f]
+        del frequencies_verify[f]
+
+    print("FREQ VERY", frequencies_verify)
+    print("FREQ OG", frequencies)
+    cutoff_interp_dB = interp1d(freq_resp_dB_verify, frequencies, assume_sorted=False)
+    cutoff_interp = interp1d(freq_resp_verify, frequencies, assume_sorted=False)
+
+    test_list=[]
+    for i in retest_f:
+        print("I in retest_f", i)
+        print(test_list)
+        if i != None:
+            list_index = frequencies.index(i)
+            test_list.append(["Old val:", freq_resp_dB[list_index]])
+            freq_resp[list_index] = cutoff_interp(f)
+            freq_resp_dB[list_index] = cutoff_interp_dB(20*(math.log10(freq_resp[list_index]).real))
+            test_list.append(["New val:", freq_resp_dB[list_index]])
+    print(test_list)
     #cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
 
     try:
-        cutoff_freq = cutoff_interp(cutoff_dB_val)
+        cutoff_freq = cutoff_interp_dB(cutoff_dB_val)
     except ValueError:
         cutoff_freq = None
-
-    print("RETEST LIST:", retest_f)
 
     return freq_resp, freq_resp_dB, cutoff_freq
 
@@ -74,7 +103,8 @@ def data_verification(freq_resp_dB, f):
     try:
         grad1 = freq_resp_dB[-1]-freq_resp_dB[-2]
         grad2 = freq_resp_dB[-2]-freq_resp_dB[-3]
-        if abs(grad2)>abs(10*grad1):
+        print("GRADS:", grad1, grad2)
+        if abs(grad2)>abs(5*grad1):
             return f
     except IndexError:
         pass
