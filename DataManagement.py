@@ -1,22 +1,31 @@
 import math
 from numpy import linspace
-from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import PchipInterpolator, interp1d
 
 def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
     """Returns the frequency response from the data provided by the test_circuit function."""
     
-    freq_resp=[]
-    freq_resp_dB=[]
+    freq_resp = []
+    freq_resp_dB = []
+    retest_f = []
     for f in frequencies:
-        gainlist=[]
+        gainlist = []
         for v in vin_PP:
             gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
         gain_avg = sum(gainlist)/len(gainlist)
         freq_resp.append(gain_avg)
-        freq_resp_dB.append(10*(math.log10(gain_avg)).real)
-    
-    cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
-    cutoff_freq = cutoff_interp(cutoff_dB_val)
+        freq_resp_dB.append(20*(math.log10(gain_avg)).real)
+        retest_f.append(data_verification(freq_resp_dB, f))
+
+    cutoff_interp = interp1d(freq_resp_dB, frequencies, assume_sorted=False)
+    #cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
+
+    try:
+        cutoff_freq = cutoff_interp(cutoff_dB_val)
+    except ValueError:
+        cutoff_freq = None
+
+    print("RETEST LIST:", retest_f)
 
     return freq_resp, freq_resp_dB, cutoff_freq
 
@@ -38,12 +47,12 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
     for i in point_maker:
         if i*10**int(first_dec) > start_freq and i*10**int(first_dec) < end_freq:
             temp_freqs.append(int(i*10**int(first_dec)))
-        if i*10**int(last_dec) < end_freq and i*10**int(first_dec) > start_freq:
+        if i*10**int(last_dec) < end_freq and i*10**int(last_dec) > start_freq:
             temp_freqs.append(int(i*10**int(last_dec)))
     if start_freq not in temp_freqs:
-        temp_freqs.append(start_freq)   
+        temp_freqs.append(start_freq)
     if end_freq not in temp_freqs:
-        temp_freqs.append(end_freq)   
+        temp_freqs.append(end_freq)
         freqs.append(temp_freqs)
     freqs.append(temp_freqs)
 
@@ -57,4 +66,21 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
     all_freqs.sort()
 
     return all_freqs
+
+
+def data_verification(freq_resp_dB, f):
+    """Checks the data has no clear outliers"""
     
+    grad1 = freq_resp_dB[-1]-freq_resp_dB[-2]
+    grad2 = freq_resp_dB[-2]-freq_resp_dB[-3]
+    if abs(grad2)>abs(10*grad1):
+        return f
+
+
+    # for i in range(len(freq_resp_dB)):
+    #     grad1 = freq_resp_dB[i]-freq_resp_dB[i-1]
+    #     grad2 = freq_resp_dB[i+1]-freq_resp_dB[i]
+    #     if abs(grad2)>abs(10*grad1):
+
+    # return freq_resp_dB
+
