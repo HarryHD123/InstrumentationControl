@@ -11,7 +11,7 @@ class InstrumentationControlApp(Tk):
         self.oscope = None
         self.siggen = None
         self.siggen_setting = None
-        self.multim = None
+        self.mmeter = None
         self.powers = None
         self.switch_frame(MainMenu)
 
@@ -595,10 +595,10 @@ class ConnectionMenu(Frame):
     def connect_all(self, master):
         master.oscope = connect_instrument(self.oscilloscope1_string)
         master.siggen = connect_instrument(self.signalgenerator1_string)
-        master.multim = connect_instrument(self.multimeter1_string)
+        master.mmeter = connect_instrument(self.multimeter1_string)
         master.powers = connect_instrument(self.powersupply1_string)
 
-        instr = [master.oscope, master.siggen, master.multim, master.powers]
+        instr = [master.oscope, master.siggen, master.mmeter, master.powers]
         instr_lbl = [self.lbl_oscope_connect, self.lbl_siggen_connect, self.lbl_multim_connect, self.lbl_powers_connect]
         for i in range(4):
             if instr[i] != None:
@@ -674,7 +674,7 @@ class DemoMenu(Frame):
 
         """
         power supply on +10, -10V
-        check ps with multim
+        check ps with mmeter
         calc predicted gain
         siggen on, calc acc gain from input output, 0.5V
         increase input voltage so gain too big
