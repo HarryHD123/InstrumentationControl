@@ -71,10 +71,13 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
 def data_verification(freq_resp_dB, f):
     """Checks the data has no clear outliers"""
     
-    grad1 = freq_resp_dB[-1]-freq_resp_dB[-2]
-    grad2 = freq_resp_dB[-2]-freq_resp_dB[-3]
-    if abs(grad2)>abs(10*grad1):
-        return f
+    try:
+        grad1 = freq_resp_dB[-1]-freq_resp_dB[-2]
+        grad2 = freq_resp_dB[-2]-freq_resp_dB[-3]
+        if abs(grad2)>abs(10*grad1):
+            return f
+    except IndexError:
+        pass
 
 
     # for i in range(len(freq_resp_dB)):
