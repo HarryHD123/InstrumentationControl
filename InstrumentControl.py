@@ -218,6 +218,12 @@ def auto_adjust(oscope, chan, meas_chan=4):
     auto_adjust_voltageaxis(oscope, chan, meas_chan)
     
 
+def full_measure(oscope, meas_chan, meas_type, source_chan_1):
+    measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1)
+    value = read_measurement(oscope, meas_chan)
+
+    return value
+
 def measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1, source_chan_2=2):
     """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
     
