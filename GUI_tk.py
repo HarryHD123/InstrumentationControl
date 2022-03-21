@@ -382,11 +382,11 @@ class OscilloscopeMenu(Frame):
         self.live_plot2.place(relx=0.75, rely=0.65, anchor=CENTER)
         self.lbl_connect_first["text"] = ''
 
-    def set_siggen(self, master, voltage, frequency, offset, wave_type):
+    def set_siggen(self, master, voltage, frequency, offset=0, wave_type='Sine'):
         if master.siggen_setting == None:
-            oscope_set_siggen(master.oscope, voltage, frequency, offset, wave_type=wave_type)
+            oscope_set_siggen(master.oscope, voltage, frequency, offset=offset, wave_type=wave_type)
         elif master.siggen_setting != None:
-            siggen_set_siggen(master.siggen, voltage, frequency, offset, wave_type=wave_type)
+            siggen_set_siggen(master.siggen, voltage, frequency, offset=offset, wave_type=wave_type)
 
     def check_connections(self, master):
         if master.siggen_setting == None:
@@ -665,13 +665,86 @@ class DemoMenu(Frame):
         self.FONTSIZE = 15
         self.FONTSIZE_LARGE = 25
 
+        # Read and set inital settings
+        self.siggen_v = 0.5
+        self.frequency = 1000
+        self.powers_pos = 7.5
+        self.powers_neg = 7.5
+        self.powers_v = 7.5
+        self.demo_stage = 1
+        self.demo_part = 0
+
+        # Create text Variables
+        self.tk_siggen_v = IntVar(self, self.siggen_v)
+        self.tk_frequency = IntVar(self, self.frequency)
+        self.tk_powers_pos = IntVar(self, self.powers_v)
+        self.tk_powers_neg = IntVar(self, self.powers_v)
+        self.tk_siggen_selected = IntVar(self, self.detect_siggen(master))
+
         # Create buttons and labels
         self.btn_home = Button (self, command=lambda: [master.switch_frame(MainMenu)], text = 'Home', font=('Helvetica', self.FONTSIZE))
-        self.lbl_heading = Label (self, text='Op Amp Demo', font=('Helvetica', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
+        self.lbl_heading = Label (self, text='Op-Amp Demo', font=('Helvetica', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
+
+        self.lbl_siggen_v = Label (self, text= 'Signal Generator Pk-pk (V):', font=('Helvetica', self.FONTSIZE))
+        self.lbl_frequency = Label (self, text='Frequency (Hz):', font=('Helvetica', self.FONTSIZE))
+        self.lbl_powers_pos = Label (self, text='Power supply + Pk-pk (V):', font=('Helvetica', self.FONTSIZE))
+        self.lbl_powers_neg = Label (self, text='Power supply - Pk-pk (V):', font=('Helvetica', self.FONTSIZE))
+
+        self.lbl_siggen_v_val = Label (self, textvariable=self.tk_siggen_v, font=('Helvetica', self.FONTSIZE))
+        self.lbl_frequency_val = Label (self, textvariable=self.tk_frequency, font=('Helvetica', self.FONTSIZE))
+        self.lbl_powers_pos_val = Label (self, textvariable=self.tk_powers_pos, font=('Helvetica', self.FONTSIZE))
+        self.lbl_powers_neg_val = Label (self, textvariable=self.tk_powers_neg, font=('Helvetica', self.FONTSIZE))
+
+        self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope, power supply and multimeter\nfrom the connections menu to run the op-amp demo', fg='red', font=('Helvetica', 10))
+        self.btn_part0 = Button (self, state=self.check_connections(master), command=lambda:[self.demo_changesettings(master, 0, 0.5, 7.5)], text = '0', height=2, width=5, font=('Helvetica', self.FONTSIZE))
+        self.btn_part1 = Button (self, state=self.check_connections(master), command=lambda:[self.demo_changesettings(master, 1, 0.5, 7.5)], text = '1', height=2, width=5, font=('Helvetica', self.FONTSIZE))
+        self.btn_part2 = Button (self, state=self.check_connections(master), command=lambda:[self.demo_changesettings(master, 2, 1, 7.5)], text = '2', height=2, width=5, font=('Helvetica', self.FONTSIZE))
+        self.btn_part3 = Button (self, state=self.check_connections(master), command=lambda:[self.demo_changesettings(master, 3, 1, 15)], text = '3', height=2, width=5, font=('Helvetica', self.FONTSIZE))
+        self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(DemoMenu)], text = 'Restart demo',  height=2, font=('Helvetica', self.FONTSIZE), fg = 'red')
+        self.btn_next = Button (self, state=self.check_connections(master), command=lambda:[self.demo_show_info(), self.demo_run(master)], text = '->', height=2, width=5, font=('Helvetica', self.FONTSIZE))
+        self.btn_back = Button (self, state=self.check_connections(master), command=lambda:[self.demo_show_info(), self.demo_run(master)], text = '<-', height=2, width=5, font=('Helvetica', self.FONTSIZE))
+
+        self.lbl_info_1 = Label (self, text="", font=('Helvetica', self.FONTSIZE))
+        self.lbl_info_2 = Label (self, text="", font=('Helvetica', self.FONTSIZE))
+        self.lbl_info_3 = Label (self, text="", font=('Helvetica', self.FONTSIZE))
+        self.lbl_info_4 = Label (self, text="", font=('Helvetica', self.FONTSIZE))
+        self.lbl_info_5 = Label (self, text="", font=('Helvetica', self.FONTSIZE))
+
+        self.radio_siggen_internal = Radiobutton (self, text = 'Internal signal generator', variable=self.tk_siggen_selected, value=1, command=lambda:[self.select_siggen(master)], font=('Helvetica', self.FONTSIZE))
+        self.radio_siggen_external = Radiobutton (self, state=self.check_siggen_connection(master), text = 'External signal generator', variable=self.tk_siggen_selected, value=2, command=lambda:[self.select_siggen(master)], font=('Helvetica', self.FONTSIZE))
 
         # Place widgets
-        self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)        
-        self.lbl_heading.place(relx=0.24, rely=0.07, anchor=CENTER)
+        self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
+        self.lbl_heading.place(relx=0.18, rely=0.07, anchor=CENTER)
+
+        self.lbl_siggen_v.place(relx=0.3, rely=0.17, anchor=CENTER)
+        self.lbl_siggen_v_val.place(relx=0.4, rely=0.17, anchor=CENTER)
+        self.lbl_frequency.place(relx=0.3, rely=0.22, anchor=CENTER)
+        self.lbl_frequency_val.place(relx=0.4, rely=0.22, anchor=CENTER)
+        self.lbl_powers_pos.place(relx=0.6, rely=0.17, anchor=CENTER)
+        self.lbl_powers_pos_val.place(relx=0.7, rely=0.17, anchor=CENTER)
+        self.lbl_powers_neg.place(relx=0.6, rely=0.22, anchor=CENTER)
+        self.lbl_powers_neg_val.place(relx=0.7, rely=0.22, anchor=CENTER)
+        
+        self.btn_part0.place(relx=0.3, rely=0.07, anchor=CENTER)
+        self.btn_part1.place(relx=0.35, rely=0.07, anchor=CENTER)
+        self.btn_part2.place(relx=0.4, rely=0.07, anchor=CENTER)
+        self.btn_part3.place(relx=0.45, rely=0.07, anchor=CENTER)
+        self.btn_back.place(relx=0.5, rely=0.07, anchor=CENTER)
+        self.btn_next.place(relx=0.55, rely=0.07, anchor=CENTER)
+        self.btn_reset.place(relx=0.65, rely=0.07, anchor=CENTER)
+        self.lbl_connect_first.place(relx=0.85, rely=0.07, anchor=CENTER)        
+        
+        self.lbl_info_1.place(relx=0.3, rely=0.40, anchor=CENTER)
+        self.lbl_info_2.place(relx=0.3, rely=0.40, anchor=CENTER)
+        self.lbl_info_3.place(relx=0.5, rely=0.40, anchor=CENTER)
+        self.lbl_info_4.place(relx=0.6, rely=0.40, anchor=CENTER)
+        self.lbl_info_5.place(relx=0.8, rely=0.40, anchor=CENTER)
+
+        self.demo_show_info()
+
+        self.radio_siggen_internal.place(relx=0.12, rely=0.17, anchor=CENTER)
+        self.radio_siggen_external.place(relx=0.12, rely=0.22, anchor=CENTER)
 
         """
         power supply on +10, -10V
@@ -683,6 +756,128 @@ class DemoMenu(Frame):
         increase power supply and show gain increase
         then increase voltage again and see gain max out
         """
+
+    def demo_show_info(self):
+        if self.demo_part == 0:
+            if self.demo_stage == 1:
+                self.lbl_info_1["text"] = "First, the power supply must be set up.\nConnect a wire to the positive terminal of channel 1 and input in port of the op-amp.\nRepeat for the negative terminal of channel 2 in port of the op-amp.\nThen connect the negative port of channel 1 and the positive port of channel 2 together and connect to the ground of your circuit."
+        elif self.demo_part == 1:
+            if self.demo_stage == 1:
+                self.lbl_info_1["text"] = "1. The power supply is set. "
+            if self.demo_stage == 2:
+                self.lbl_info_2["text"] = "2. Check the power supply output with the mulitmeter. "
+
+
+    def demo_run(self, master):
+        if self.demo_stage == 1: # Set powers supply
+            powers_set_powers(master.powers, self.powers_v, 3, 1) # Connect to positive terminal of chan1
+            powers_set_powers(master.powers, -self.powers_v, 3, 2) # # Connect to negative terminal of chan1
+            # Connect the unused ports for chan1 and chan2 of power supply together to form ground
+            self.demo_stage = 2
+        if self.demo_stage == 2: # Check power supply with multimeter
+            mmeter_v = mmeter_get_voltage(master.mmeter) # Check power supply with multi meter
+            print("Power supply V", self.powers_v)
+            print("Power supply V", self.voltage)
+            print("Multimeter V", mmeter_v)
+            self.demo_stage = 3
+        if self.demo_stage == 3: # Calculate the predicted gain
+            # Set gain to be 10
+            gain_predicted = self.calc_gain(1,10)
+            print("Predicted gain", gain_predicted)
+            self.demo_stage = 4
+        if self.demo_stage == 4: # Set the signal generator
+            self.set_siggen(master, self.voltage, 1000)
+            Vin = full_measure(master.oscope, 1, 'PEAK', 1) # Vin
+            Vout = full_measure(master.oscope, 2, 'PEAK', 2) # Vout
+            self.demo_stage = 5
+        if self.demo_stage == 5: # Measure the actual gain - comment on what this means
+            gain_measured = self.calc_gain(Vout/Vin)
+            print("Measured gain", gain_measured)
+            # Gain should 10 as predicted, however, this is limited by the voltage of the power supply
+            self.demo_stage = 1
+
+    def demo_changesettings(self, demo_part, siggen_v, powers_v_pos, powers_v_neg=None):
+        self.demo_part = demo_part
+        self.demo_stage = 1
+        self.voltage = siggen_v
+        self.powers_v = powers_v_pos
+        self.powers_pos = powers_v_pos
+        if powers_v_neg == None:
+            self.powers_neg = -powers_v_pos
+        else: 
+            self.powers_neg = powers_v_neg
+
+    def calc_gain(self, input, output):
+        gain = output/input
+        return gain
+
+    def set_siggen(self, master, voltage, frequency, offset=0, wave_type='Sine'):
+        if master.siggen_setting == None:
+            oscope_set_siggen(master.oscope, voltage, frequency, offset=offset, wave_type=wave_type)
+        elif master.siggen_setting != None:
+            siggen_set_siggen(master.siggen, voltage, frequency, offset=offset, wave_type=wave_type)
+
+
+    def check_connections(self, master):
+        if master.siggen_setting == None:
+            state = self.check_oscope_connection(master) and self.check_powers_connection(master) and self.check_mmeter_connection(master)
+        else:
+            state = self.check_siggen_connection(master) and self.check_oscope_connection(master) and self.check_powers_connection(master) and self.check_mmeter_connection(master)
+        
+        return state
+
+    def check_oscope_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.oscope != None:
+            return NORMAL            
+        else:
+            return DISABLED
+
+    def check_siggen_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.siggen != None:
+            return NORMAL            
+        else:
+            return DISABLED
+
+    def check_powers_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.powers != None:
+            return NORMAL            
+        else:
+            return DISABLED
+    
+    def check_mmeter_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.mmeter != None:
+            return NORMAL            
+        else:
+            return DISABLED
+
+    def detect_siggen(self, master):
+        if master.siggen_setting == None:
+            return 1
+        else:
+            return 2
+
+    def select_siggen(self, master):
+        if self.tk_siggen_selected.get() == 2:
+            master.siggen_setting = master.siggen
+        else:
+            master.siggen_setting = None
+
+    def convert_num(self, data):
+        """Converts string to int if it can, otherwise to float"""
+        try:
+            val = int(data)
+        except:
+            val = float(data)
+        return val
+    
+    def Reset(self):
+        """Resets demo to first stage"""
+        self.demo_stage = 1
+
 
 if __name__ == "__main__":
     app = InstrumentationControlApp()
