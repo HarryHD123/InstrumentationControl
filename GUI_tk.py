@@ -1,6 +1,6 @@
-from statistics import NormalDist
 from tkinter import *
 import shelve
+from tkinter import font
 from InstrumentControl import *
 from DataManagement import *
 from GraphTools import EmbedGraph
@@ -353,7 +353,11 @@ class OscilloscopeMenu(Frame):
         self.radio_siggen_external = Radiobutton (self, state=self.check_siggen_connection(master), text = 'External signal generator', variable=self.tk_siggen_selected, value=2, command=lambda:[self.select_siggen(master)], font=('Helvetica', self.FONTSIZE))
         self.radio_coupling_DC = Radiobutton (self, text = 'DC Coupling', variable=self.tk_coupling, value=1, command=lambda:[self.select_coupling()], font=('Helvetica', self.FONTSIZE))
         self.radio_coupling_AC = Radiobutton (self, text = 'AC Coupling', variable=self.tk_coupling, value=2, command=lambda:[self.select_coupling()], font=('Helvetica', self.FONTSIZE))
-        self.drop_wavetype = OptionMenu (self, self.tk_wavetype, *self.wavetype_options)
+        self.drop_wavetype = OptionMenu (self, self.tk_wavetype, *self.wavetype_options, command = self.wavetype_change)
+        self.wavetype_change(self.wavetype)
+        self.drop_wavetype.config(font=('Helvetica', self.FONTSIZE))
+        self.drop_wavetype_menu = self.nametowidget(self.drop_wavetype.menuname)
+        self.drop_wavetype_menu.config(font=('Helvetica', self.FONTSIZE))
         self.drop_graph1 = OptionMenu (self, self.tk_chan1, *self.chan_options)
         self.drop_graph2 = OptionMenu (self, self.tk_chan2, *self.chan_options)
 
@@ -495,6 +499,15 @@ class OscilloscopeMenu(Frame):
                 return 'SQUARE'
             elif self.wavetype == 'DC':
                 return 'DC'
+
+    def wavetype_change(self, wavetype):
+        wavetype = self.tk_wavetype.get()
+        if wavetype == 'DC':
+            self.lbl_voltage['text'] = 'Voltage (V)'
+            self.lbl_frequency['state'] = DISABLED
+        else:
+            self.lbl_voltage['text'] = 'Pk-pk Amplitude (V)'
+            self.lbl_frequency['state'] = NORMAL
 
     def detect_graph(self, graph_no):
         if graph_no == 1:
@@ -754,6 +767,8 @@ class DemoMenu(Frame):
         self.lbl_info_5 = Label (self, text="", font=('Helvetica', self.FONTSIZE))
         self.img = self.load_image("Images\op_amp_circ2.png", new_size = (750, 400))
         self.lbl_img = Label(self, image = self.img)
+        self.img2 = self.load_image("Images\circ_genV.png", new_size = (750, 400))
+        self.lbl_img2 = Label(self, image = self.img)
 
         # Place widgets
         self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
@@ -808,6 +823,7 @@ class DemoMenu(Frame):
         self.lbl_info_4["text"] = ''
         self.lbl_info_5["text"] = ''
         self.lbl_img["image"] = ''
+        self.lbl_img2["image"] = ''
         self.lbl_info_1.place(relx=1, rely=1, anchor=CENTER)
         self.lbl_info_2.place(relx=1, rely=1, anchor=CENTER)
         self.lbl_info_3.place(relx=1, rely=1, anchor=CENTER)
@@ -821,9 +837,11 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "This demonstration is designed to teach you about saturation."
             self.lbl_info_2["text"] = "The circuit below shows the inverting op-amp circuit which will be used to carry out the following demonstration."
             self.lbl_img["image"] = self.load_image("Images\op_amp_circ2.png", new_size = (750, 400))
+            self.lbl_img2["image"] = self.load_image("Images\circ_genV.png", new_size = (400, 400), num = 2)
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.35, anchor=CENTER)
-            self.lbl_img.place(relx=0.5, rely=0.65, anchor=CENTER)
+            self.lbl_img.place(relx=0.25, rely=0.65, anchor=CENTER)
+            self.lbl_img2.place(relx=0.75, rely=0.65, anchor=CENTER)
         elif self.demo_stage == 2:
             self.lbl_info_1["text"] = "Connect the power supply as shown."
             self.lbl_info_2["text"] = "Connect the positive side of channel 1 to Vcc and the negative side of channel 2 to -Vcc."
@@ -1024,9 +1042,13 @@ class DemoMenu(Frame):
             val = float(data)
         return val
     
-    def load_image(self, image, new_size):
-        self.img = ImageTk.PhotoImage(Image.open(image).resize(new_size, Image.ANTIALIAS))
-        return self.img
+    def load_image(self, image, new_size, num=1):
+        if num == 1:
+            self.img = ImageTk.PhotoImage(Image.open(image).resize(new_size, Image.ANTIALIAS))
+            return self.img
+        elif num == 2:
+            self.img2 = ImageTk.PhotoImage(Image.open(image).resize(new_size, Image.ANTIALIAS))
+            return self.img2
     
     def Reset(self):
         """Resets demo to first stage"""
