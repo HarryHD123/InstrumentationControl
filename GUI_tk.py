@@ -788,7 +788,7 @@ class DemoMenu(Frame):
             self.demo_stage += 1
         self.lbl_stage_num["text"] = f'{self.demo_stage}/21'
 
-        if self.demo_stage > self.demo_parts[0]-1:
+        if self.demo_stage > self.demo_parts[0]-2:
             self.btn_next['state']=self.check_connections(master)
             self.btn_next_big['state']=self.check_connections(master)
         else:
@@ -860,13 +860,13 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "2. Check the power supply output with the mulitmeter."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 9:
-            self.lbl_info_1["text"] = "3. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 10:
-            self.lbl_info_1["text"] = "4. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 11:
-            self.lbl_info_1["text"] = "5. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 12:
             self.lbl_info_1["text"] = f"1. The power supply is set to output + and - {self.powers_v}V."
@@ -875,13 +875,13 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "2. Check the power supply output with the mulitmeter."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 14:
-            self.lbl_info_1["text"] = "3. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 15:
-            self.lbl_info_1["text"] = "4. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 16:
-            self.lbl_info_1["text"] = "5. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 17:
             self.lbl_info_1["text"] = f"1. The power supply is set to output + and - {self.powers_v}V."
@@ -890,13 +890,13 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "2. Check the power supply output with the mulitmeter."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 19:
-            self.lbl_info_1["text"] = "3. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 20:
-            self.lbl_info_1["text"] = "4. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 21:
-            self.lbl_info_1["text"] = "5. Check the power supply output with the mulitmeter."
+            self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
 
     def demo_run(self, master):
