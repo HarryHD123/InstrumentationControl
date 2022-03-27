@@ -3,62 +3,6 @@ import copy
 from numpy import linspace
 from scipy.interpolate import PchipInterpolator, interp1d
 
-def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
-    """Returns the frequency response from the data provided by the test_circuit function."""
-    
-    freq_resp = []
-    freq_resp_dB = []
-    retest_f = []
-    print("ALL F", frequencies)
-    for f in frequencies:
-        gainlist = []
-        for v in vin_PP:
-            gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
-        gain_avg = sum(gainlist)/len(gainlist)
-        freq_resp.append(gain_avg)
-        freq_resp_dB.append(20*(math.log10(gain_avg)).real)
-        retest_f.append(data_verification(freq_resp_dB, f))
-
-    print("RETEST LIST:", retest_f)
-    freq_resp_verify = copy.deepcopy(freq_resp)
-    freq_resp_dB_verify = copy.deepcopy(freq_resp_dB)
-    frequencies_verify = copy.deepcopy(frequencies)
-    unwanted_freqs = []
-    for f in retest_f:
-        if f != None:
-            unwanted_freqs.append(frequencies.index(f))
-    
-    for f in sorted(unwanted_freqs, reverse = True):
-        del freq_resp_verify[f]
-        del freq_resp_dB_verify[f]
-        del frequencies_verify[f]
-
-    print("FREQ VERY", frequencies_verify)
-    print("FREQ OG", frequencies)
-    cutoff_interp_dB = interp1d(freq_resp_dB_verify, frequencies, assume_sorted=False)
-    cutoff_interp = interp1d(freq_resp_verify, frequencies, assume_sorted=False)
-
-    test_list=[]
-    for i in retest_f:
-        print("I in retest_f", i)
-        print(test_list)
-        if i != None:
-            list_index = frequencies.index(i)
-            test_list.append(["Old val:", freq_resp_dB[list_index]])
-            freq_resp[list_index] = cutoff_interp(f)
-            freq_resp_dB[list_index] = cutoff_interp_dB(20*(math.log10(freq_resp[list_index]).real))
-            test_list.append(["New val:", freq_resp_dB[list_index]])
-    print(test_list)
-    #cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
-
-    try:
-        cutoff_freq = cutoff_interp_dB(cutoff_dB_val)
-    except ValueError:
-        cutoff_freq = None
-
-    return freq_resp, freq_resp_dB, cutoff_freq
-
-
 def points_list_maker(start_freq, end_freq, points_per_dec):
     """Creates a list of frequencies with a specified number of points per decade."""
 
@@ -97,6 +41,61 @@ def points_list_maker(start_freq, end_freq, points_per_dec):
     return all_freqs
 
 
+def calc_freq_response(results, vin_PP, frequencies, cutoff_dB_val=-3):
+    """Returns the frequency response from the data provided by the test_circuit function."""
+    
+    freq_resp = []
+    freq_resp_dB = []
+    retest_f = []
+    print("ALL F", frequencies)
+    for f in frequencies:
+        gainlist = []
+        for v in vin_PP:
+            gainlist.append(results[f'v={v} f={f}'][1]/results[f'v={v} f={f}'][0])
+        gain_avg = sum(gainlist)/len(gainlist)
+        freq_resp.append(gain_avg)
+        freq_resp_dB.append(20*(math.log10(gain_avg)).real)
+        retest_f.append(data_verification(freq_resp_dB, f))
+
+    print("RETEST LIST:", retest_f)
+    freq_resp_verify = copy.deepcopy(freq_resp)
+    freq_resp_dB_verify = copy.deepcopy(freq_resp_dB)
+    frequencies_verify = copy.deepcopy(frequencies)
+    unwanted_freqs = []
+    for f in retest_f:
+        if f != None:
+            unwanted_freqs.append(frequencies.index(f))
+    
+    for f in sorted(unwanted_freqs, reverse = True):
+        del freq_resp_verify[f]
+        del freq_resp_dB_verify[f]
+        del frequencies_verify[f]
+
+    print("FREQ VERY", frequencies_verify)
+    print("FREQ OG", frequencies)
+    cutoff_interp_dB = interp1d(freq_resp_dB_verify, frequencies_verify, assume_sorted=False)
+    cutoff_interp = interp1d(freq_resp_verify, frequencies_verify, assume_sorted=False)
+
+    test_list=[]
+    for i in retest_f:
+        if i != None:
+            print("I in retest_f", i)
+            list_index = frequencies.index(i)
+            test_list.append(["Old val:", freq_resp_dB[list_index]])
+            freq_resp[list_index] = cutoff_interp(i)
+            freq_resp_dB[list_index] = cutoff_interp_dB(i)
+            test_list.append(["New val:", freq_resp_dB[list_index]])
+    print(test_list)
+    #cutoff_interp = PchipInterpolator(freq_resp_dB, frequencies) # PchipInterpolator used as it gives a more accurate result than using standard linear interpolation
+
+    try:
+        cutoff_freq = [cutoff_interp_dB(cutoff_dB_val)]
+    except ValueError:
+        cutoff_freq = None
+
+    return freq_resp, freq_resp_dB, cutoff_freq
+
+
 def data_verification(freq_resp_dB, f):
     """Checks the data has no clear outliers"""
     
@@ -116,4 +115,3 @@ def data_verification(freq_resp_dB, f):
     #     if abs(grad2)>abs(10*grad1):
 
     # return freq_resp_dB
-

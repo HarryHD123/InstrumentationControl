@@ -19,7 +19,6 @@ multimeter1_string = 'TCPIP0::192.168.1.5::5025::SOCKET'
 signalgenerator1_string = 'TCPIP0::192.168.1.3::inst0::INSTR'
 powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'
 
-
 # -------------------------------
 # UTILITY FUNCTIONS
 # -------------------------------
@@ -224,6 +223,7 @@ def full_measure(oscope, meas_chan, meas_type, source_chan_1):
 
     return value
 
+
 def measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1, source_chan_2=2):
     """Turns on measurement channels to record the desired values. Note: Phase is calculated as source_chan_2-source_chan_1"""
     
@@ -242,7 +242,7 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
 
     if statistics:
         command(oscope, f"MEASurement{meas_chan}:STATistics:RESet")
-        time.sleep(1) # Needed for statistics to be reset and some values taken
+        time.sleep(2.5) # Needed for statistics to be reset and some values taken
         command(oscope, f"MEASurement{meas_chan}:RESult:AVG?")
     else:
         time.sleep(0.5) # Needed to allow the waveform to settle
@@ -258,11 +258,12 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
     return value
 
 
-def acquire_waveform(oscope, chan, plot_graph=False):
+def acquire_waveform(oscope, chan, plot_graph=False, adjust=True):
     """Acquire waveform."""
 
     # SET UP CHANNEL
-    auto_adjust(oscope, chan)
+    if adjust:
+        auto_adjust(oscope, chan)
 
     command(oscope, 'CHAN1:TYPE HRES')
     command(oscope, 'FORM UINT,16;FORM?')
@@ -307,7 +308,7 @@ def acquire_waveform(oscope, chan, plot_graph=False):
     waveform_data = np.array([])
     
     for k in range(iter_no-1):
-        temp_data = oscope.read_bytes(int(bin_size)) #'int16') # read the data in the current bin. We are
+        temp_data = oscope.read_bytes(int(bin_size)) # read the data in the current bin.
         mv = memoryview(temp_data).cast('H')
         bin_data = np.array(mv)
         waveform_data = np.append(waveform_data, bin_data)
@@ -318,8 +319,9 @@ def acquire_waveform(oscope, chan, plot_graph=False):
     # CONVERTS WAVEFORM DATA TO VALUES
     no_of_data_array_elements = len(waveform_data)
     times = [i * float(x_inc) + float(x_or) for i in range(no_of_data_array_elements)]
+    print(times)
     voltages = waveform_data * float(y_inc) + float(y_or) 
-
+    print(voltages)
     # PLOT WAVEFORM
     if plot_graph:
         plt.figure(2)
@@ -327,7 +329,7 @@ def acquire_waveform(oscope, chan, plot_graph=False):
         plt.ylabel('Voltage (V))')
         plt.xlabel('Time (s)')
         plt.title('Waveform')
-        #plt.autoscale()
+        plt.autoscale()
         plt.grid(which='both')
         plt.show(block=False)
         plt.show()
@@ -338,7 +340,7 @@ def acquire_waveform(oscope, chan, plot_graph=False):
     return times, voltages
 
 
-def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, meas_chan4=4, statistics=True):
+def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, meas_chan4=4, statistics=True, meas_phase=None):
     """Take measurements for the voltages and frequencies specified.
     A frequency response is found for the results of this testing.
     This frequency response can be plotted by setting plot_freq_resp=True.
@@ -370,7 +372,8 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
     #Initiate result variables
     v_in_list = []
     v_out_list = []
-    phase_list = []
+    if meas_phase != None:
+        phase_list = []
     results_dict = {} 
  
     # Run tests
@@ -390,10 +393,11 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
             # Take measurements and record data
             v_in = read_measurement(oscope, meas_chan1, statistics=statistics)
             v_out = read_measurement(oscope, meas_chan2, statistics=statistics)
-            phase = read_measurement(oscope, meas_chan3, statistics=statistics)
             v_in_list.append(v_in)
             v_out_list.append(v_out)
-            phase_list.append(phase)
+            if meas_phase != None:
+                phase = read_measurement(oscope, meas_chan3, statistics=statistics)
+                phase_list.append(phase)
             results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
 
     # ALL AUTO ADJUST
@@ -559,7 +563,8 @@ if __name__ == "__main__":
             print(f"Connection to {str(instrument)} failed")
 
     #command(oscope, f"TIMebase:RANGe 0.002")
-    auto_adjust(oscope, 2)
+    auto_adjust(oscope, 1)
+    acquire_waveform(oscope, 1, plot_graph=True)
 
     #oscope_set_siggen(oscope, 1, 1000, offset=0)
     #oscope_default_settings(oscope, 1)

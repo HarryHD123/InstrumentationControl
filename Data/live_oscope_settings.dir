@@ -3,6 +3,7 @@
 'dc_offset', (1024, 5)
 'meas_type', (1536, 14)
 'coupling', (2048, 12)
-'wavetype', (2560, 12)
+'wavetype', (2560, 14)
 'graph1', (3072, 11)
 'graph2', (3584, 11)
+'adjust', (4096, 5)

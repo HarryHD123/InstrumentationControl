@@ -1,6 +1,5 @@
 from tkinter import *
 import shelve
-from tkinter import font
 from InstrumentControl import *
 from DataManagement import *
 from GraphTools import EmbedGraph
@@ -11,11 +10,11 @@ class InstrumentationControlApp(Tk):
     def __init__(self):
         Tk.__init__(self)
         self._frame = None
-        self.oscope = None
-        self.siggen = None
+        self.oscope = True
+        self.siggen = True
         self.siggen_setting = None
-        self.mmeter = None
-        self.powers = None
+        self.mmeter = True
+        self.powers = True
 
         self.white = '#f1f1f1'
         self.white2 = '#fefeff'
@@ -263,8 +262,8 @@ class OscilloscopeMenu(Frame):
         self.lbl_frequency = Label (self, text='Frequency (Hz)', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_offset = Label (self, text='DC Offset (V)', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_wavetype = Label (self, text='Wave type', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
-        self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from\nthe connections menu to acquire waveform', fg='red', font=('Montserrat', 10))
-        self.lbl_testing = Label (self, text='Loading oscilloscope screen\nPlease wait', font=('Montserrat', 10))
+        self.lbl_testing = Label (self, text='', font=('Montserrat', 10), fg = 'red')
+        self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from\nthe connections menu to acquire waveform', fg ='red', font=('Montserrat', 10))
         self.btn_set_siggen = Button (self, state=self.check_connections(master), command=lambda:[self.entry_update_values(), self.set_siggen(master, self.voltage, self.frequency, self.dc_offset, wave_type=self.detect_wavetype())], text = 'Set Signal Generator', height=2, width=18, font=('Montserrat', self.FONTSIZE))
         self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.show_testing_label(), self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2))], text = 'Acquire Waveforms', height=2, width=16, font=('Montserrat', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(OscilloscopeMenu)], text = 'RESET', font=('Montserrat', self.FONTSIZE), fg = 'red')
@@ -287,9 +286,12 @@ class OscilloscopeMenu(Frame):
         self.drop_wavetype_menu.config(font=('Montserrat', self.FONTSIZE))
         self.drop_graph1 = OptionMenu (self, self.tk_chan1, *self.chan_options)
         self.drop_graph2 = OptionMenu (self, self.tk_chan2, *self.chan_options)
-
+        self.lbl_graph_adjust = Label (self, text='Auto Adjust', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.adjust_init = self.detect_adjust()
+        self.btn_graph_adjust = Button (self, command=lambda:[self.select_adjust()], text = self.adjust_init[0], font=('Montserrat', self.FONTSIZE), fg = self.adjust_init[1])
+        
         # Place widgets
-        self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
+        self.btn_home.place(relx=0.06, rely=0.07, anchor=CENTER)
         self.lbl_heading.place(relx=0.12, rely=0.07, anchor=W)
         self.border.place(relx=0.5, rely=0.22, anchor=CENTER)
         self.border_edge.place(relx=0.5, rely=0.22, anchor=CENTER)
@@ -301,47 +303,50 @@ class OscilloscopeMenu(Frame):
         self.lbl_offset.place(relx=0.1, rely=0.27, anchor=CENTER)
         self.entry_offset.place(relx=0.2, rely=0.27, anchor=CENTER)
 
-        self.lbl_wavetype.place(relx=0.27, rely=0.17, anchor=CENTER)
-        self.drop_wavetype.place(relx=0.27, rely=0.22, anchor=CENTER)
+        self.lbl_wavetype.place(relx=0.27, rely=0.19, anchor=CENTER)
+        self.drop_wavetype.place(relx=0.27, rely=0.24, anchor=CENTER)
 
-        self.radio_siggen_internal.place(relx=0.4, rely=0.17, anchor=CENTER)
-        self.radio_siggen_external.place(relx=0.4, rely=0.22, anchor=CENTER)
+        self.radio_siggen_internal.place(relx=0.51, rely=0.20, anchor=CENTER)
+        self.radio_siggen_external.place(relx=0.51, rely=0.24, anchor=CENTER)
 
-        self.radio_coupling_DC.place(relx=0.55, rely=0.17, anchor=CENTER)
-        self.radio_coupling_AC.place(relx=0.55, rely=0.22, anchor=CENTER)
+        self.radio_coupling_DC.place(relx=0.36, rely=0.20, anchor=CENTER)
+        self.radio_coupling_AC.place(relx=0.36, rely=0.24, anchor=CENTER)
 
         self.drop_graph1.place(relx=0.25, rely=0.34, anchor=CENTER)
         self.drop_graph2.place(relx=0.75, rely=0.34, anchor=CENTER)
+        self.lbl_graph_adjust.place(relx=0.80, rely=0.27, anchor=CENTER)
+        self.btn_graph_adjust.place(relx=0.86, rely=0.27, anchor=CENTER)
         
-        self.btn_set_siggen.place(relx=0.68, rely=0.19, anchor=CENTER)
+        self.btn_set_siggen.place(relx=0.68, rely=0.22, anchor=CENTER)
         self.btn_acquire_waveform.place(relx=0.82, rely=0.19, anchor=CENTER)
-        self.btn_reset.place(relx=0.92, rely=0.19, anchor=CENTER)
+        self.btn_reset.place(relx=0.92, rely=0.22, anchor=CENTER)
         self.lbl_connect_first.place(relx=0.78, rely=0.07, anchor=CENTER)
+        self.lbl_testing.place(relx=0.82, rely=0.07, anchor = CENTER)
         self.btn_export.place(relx=0.92, rely=0.07, anchor=CENTER)
 
         # Draw graphs
         times = [1,2,3,4,5,6,7,8,9,10]
         voltages = [0.1,0.2,0.3,0.2,0.1,0,-0.1,-0.2,-0.3,2]
-        self.live_plot = EmbedGraph((times,voltages), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5))
+        self.live_plot = EmbedGraph((times,voltages), heading='Oscilloscope Channel', y_label='Voltage (V)', x_label='Time (s)', size = (7.5,5))
         self.live_plot.place(relx=0.25, rely=0.68, anchor=CENTER)
         times2 = [1,2,3,4,5,6,7,8,9,10]
         voltages2 = [0.1,0.2,0.3,0.2,0.1,0,-0.1,-0.2,-0.3,-5]
-        self.live_plot2 = EmbedGraph((times2,voltages2), heading='Live Oscilloscope', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5))
+        self.live_plot2 = EmbedGraph((times2,voltages2), heading='Oscilloscope Channel', y_label='Voltage (V)', x_label='Time (s)', size = (7.5,5), colour = 'r')
         self.live_plot2.place(relx=0.75, rely=0.68, anchor=CENTER)
 
     def show_testing_label(self):
-        self.lbl_connect_first["text"] = 'Acquiring waveforms\nPlease wait'
+        self.lbl_testing["text"] = 'Acquiring waveforms\nPlease wait'
 
     def update_live_graph(self, oscope, chan1=1, chan2=2):
-        times, voltages = acquire_waveform(oscope, chan1)
+        times, voltages = acquire_waveform(oscope, chan1, adjust=self.adjust1)
         self.data_g1 = [times, voltages]
-        self.live_plot = EmbedGraph((times,voltages), heading='Current Waveform Channel 1', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5))
+        self.live_plot = EmbedGraph((times,voltages), heading=f'Waveform Channel {chan1}', y_label='Voltage (V)', x_label='Time (s)', size = (7.5,5))
         self.live_plot.place(relx=0.25, rely=0.68, anchor=CENTER)
-        times2, voltages2 = acquire_waveform(oscope, chan2)
+        times2, voltages2 = acquire_waveform(oscope, chan2, adjust=self.adjust2)
         self.data_g2 = [times2, voltages2]
-        self.live_plot2 = EmbedGraph((times2,voltages2), heading='Current Waveform Channel 2', x_label='Voltage (V)', y_label='Time (s)', size = (7.5,5))
+        self.live_plot2 = EmbedGraph((times2,voltages2), heading=f'Waveform Channel {chan2}', y_label='Voltage (V)', x_label='Time (s)', size = (7.5,5), colour = 'r')
         self.live_plot2.place(relx=0.75, rely=0.68, anchor=CENTER)
-        self.lbl_connect_first["text"] = ''
+        self.lbl_testing["text"] = ''
 
     def check_export(self):
         """Checks there is data to be exported"""
@@ -412,6 +417,22 @@ class OscilloscopeMenu(Frame):
             self.coupling = 'AC'
         else:
             self.coupling = 'DC'
+
+    def select_adjust(self):
+        if self.adjust == 1:
+            self.adjust = 0
+            self.btn_graph_adjust["text"]='OFF'
+            self.btn_graph_adjust["fg"]='red'
+        else: 
+            self.adjust = 1
+            self.btn_graph_adjust["text"]='ON'
+            self.btn_graph_adjust["fg"]='green'
+
+    def detect_adjust(self):
+        if self.adjust == 1:
+            return ['ON', 'green']
+        elif self.adjust == 0: 
+            return ['OFF', 'red'] 
 
     def detect_wavetype(self):
         if self.tk_siggen_selected.get() == 1:
@@ -491,6 +512,7 @@ class OscilloscopeMenu(Frame):
         test_settings_file["wavetype"] = self.wavetype
         test_settings_file["graph1"] = self.chan1
         test_settings_file["graph2"] = self.chan2
+        test_settings_file["adjust"] = self.adjust
         test_settings_file.close()
 
     def ReadSettings(self):
@@ -503,6 +525,7 @@ class OscilloscopeMenu(Frame):
         self.wavetype = test_settings_file["wavetype"]
         self.chan1 = test_settings_file["graph1"]
         self.chan2 = test_settings_file["graph2"]
+        self.adjust = test_settings_file["adjust"]
         test_settings_file.close()
 
     def Reset(self):
@@ -516,6 +539,7 @@ class OscilloscopeMenu(Frame):
         self.chan2 = 2
         self.data_g1 = None
         self.data_g2 = None
+        self.adjust = 1
 
 class FreqRespMenu(Frame):
     def __init__(self, master):
@@ -552,8 +576,8 @@ class FreqRespMenu(Frame):
         self.lbl_freqsteps = Label (self, text='Frequencies per decade', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_offset = Label (self, text='DC Offset (V)', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_cutoff = Label (self, text='Cutoff (dB)', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_testing = Label (self, text='', fg='red', font=('Montserrat', 10))
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from the connections\nmenu to measure the frequency response', fg='red', font=('Montserrat', 10))
-        self.lbl_testing = Label (self, text='Testing circuit\nPlease wait', fg='red', font=('Montserrat', 10))
         self.btn_acquire_freqresp = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.acquire_results(master.oscope, siggen=master.siggen_setting), self.check_freq_response_calc(self.btn_acquire_freqresp), self.update_freq_resp_plot()], text = 'Measure\nFrequency Response', height=2, width=17, font=('Montserrat', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(FreqRespMenu)], text = 'RESET', font=('Montserrat', self.FONTSIZE), fg = 'red')
         self.btn_export = Button (self, state=self.check_export(), command=lambda:[self.export()], text = 'Export', font=('Montserrat', self.FONTSIZE))
@@ -600,16 +624,16 @@ class FreqRespMenu(Frame):
         
         self.btn_acquire_freqresp.place(relx=0.13, rely=0.75, anchor=CENTER)
         self.btn_reset.place(relx=0.13, rely=0.85, anchor=CENTER)
-        self.lbl_connect_first.place(relx=0.80, rely=0.06, anchor=CENTER)  
-        self.btn_export.place(relx=0.95, rely=0.06, anchor=CENTER)
+        self.lbl_connect_first.place(relx=0.78, rely=0.07, anchor=CENTER)
+        self.lbl_testing.place(relx=0.84, rely=0.07, anchor = CENTER) 
+        self.btn_export.place(relx=0.92, rely=0.07, anchor=CENTER)
 
         # Draw graph
-        self.freq_resp_plot = EmbedGraph((1,1), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, size = (11,6.8))
+        self.freq_resp_plot = EmbedGraph(([1000,10000,15000,20000,50000,100000],[0,0,-1,-3,-6,-12]), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, size = (11,6.8))
         self.freq_resp_plot.place(relx=0.62, rely=0.55, anchor=CENTER)
 
     def show_testing_label(self):
         self.lbl_testing["text"] = 'Testing circuit\nPlease wait'
-        self.lbl_testing.place(relx=0.12, rely=0.92, anchor=CENTER)
 
     def acquire_results(self, oscope, siggen=None):
         self.results = test_circuit(oscope, [self.voltages], self.frequencies, siggen=siggen)
@@ -790,30 +814,32 @@ class DemoMenu(Frame):
         self.tk_siggen_selected = IntVar(self, self.detect_siggen(master))
 
         # Create buttons and labels
+        self.border_edge = Label (self, bg = master.lblue, height=7, width=212)
+        self.border = Label (self, bg = master.dblue2, height=6, width=210)
         self.btn_home = Button (self, command=lambda: [master.switch_frame(MainMenu)], text = 'Home', font=('Montserrat', self.FONTSIZE))
         self.lbl_heading = Label (self, text='Op-Amp Demo', font=('Montserrat', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
 
-        self.lbl_siggen_v = Label (self, text= 'Signal Generator Pk-pk (V):', font=('Montserrat', self.FONTSIZE))
-        self.lbl_frequency = Label (self, text='Frequency (Hz):', font=('Montserrat', self.FONTSIZE))
-        self.lbl_powers_pos = Label (self, text='Power supply + (V):', font=('Montserrat', self.FONTSIZE))
-        self.lbl_powers_neg = Label (self, text='Power supply - (V):', font=('Montserrat', self.FONTSIZE))
+        self.lbl_siggen_v = Label (self, text= 'Signal Generator Pk-pk (V):', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_frequency = Label (self, text='Frequency (Hz):', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_powers_pos = Label (self, text='Power supply + (V):', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_powers_neg = Label (self, text='Power supply - (V):', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
 
-        self.lbl_siggen_v_val = Label (self, text=f"{self.siggen_v}", font=('Montserrat', self.FONTSIZE))
-        self.lbl_frequency_val = Label (self, text=f"{self.frequency}", font=('Montserrat', self.FONTSIZE))
-        self.lbl_powers_pos_val = Label (self, text=f"{self.powers_v}", font=('Montserrat', self.FONTSIZE))
-        self.lbl_powers_neg_val = Label (self, text=f"{self.powers_v}", font=('Montserrat', self.FONTSIZE))
+        self.lbl_siggen_v_val = Label (self, text=f"{self.siggen_v}", font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_frequency_val = Label (self, text=f"{self.frequency}", font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_powers_pos_val = Label (self, text=f"{self.powers_v}", font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_powers_neg_val = Label (self, text=f"{self.powers_v}", font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
 
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope, power supply and multimeter\nfrom the connections menu to run the op-amp demo', fg='red', font=('Montserrat', 10))
-        self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(DemoMenu)], text = 'Restart demo',  height=2, font=('Montserrat', self.FONTSIZE), fg = 'red')
+        self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(DemoMenu)], text = 'RESTART DEMO', font=('Montserrat', self.FONTSIZE), fg = 'red')
         self.btn_next = Button (self, command=lambda:[self.demo_stage_change(master, 'next'), self.demo_show_info(), self.demo_run(master)], text = '→', font=('Montserrat', self.FONTSIZE+10))
         self.btn_back = Button (self, command=lambda:[self.demo_stage_change(master, 'back'), self.demo_show_info(), self.demo_run(master)], text = '←', font=('Montserrat', self.FONTSIZE+10))
         self.btn_next_big = Button (self, command=lambda:[self.demo_stage_change(master, 'next'), self.demo_show_info(), self.demo_run(master)], text = 'Next', height=2, width=7, font=('Montserrat', self.FONTSIZE), fg = 'green')
 
-        self.line = Canvas (self, width=2000)
-        self.line.create_line(1, 10, 10000, 10, width=1)
+        #self.line = Canvas (self, width=2000)
+        #self.line.create_line(1, 10, 10000, 10, width=1)
 
-        self.radio_siggen_internal = Radiobutton (self, text = 'Internal signal generator', variable=self.tk_siggen_selected, value=1, command=lambda:[self.select_siggen(master)], font=('Montserrat', self.FONTSIZE))
-        self.radio_siggen_external = Radiobutton (self, state=self.check_siggen_connection(master), text = 'External signal generator', variable=self.tk_siggen_selected, value=2, command=lambda:[self.select_siggen(master)], font=('Montserrat', self.FONTSIZE))
+        self.radio_siggen_internal = Radiobutton (self, text = 'Internal signal generator', variable=self.tk_siggen_selected, value=1, command=lambda:[self.select_siggen(master)], font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2, activebackground=master.dblue2, activeforeground=master.white, selectcolor=master.dblue2)
+        self.radio_siggen_external = Radiobutton (self, state=self.check_siggen_connection(master), text = 'External signal generator', variable=self.tk_siggen_selected, value=2, command=lambda:[self.select_siggen(master)], font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2, activebackground=master.dblue2, activeforeground=master.white, selectcolor=master.dblue2)
 
         self.lbl_stage_num = Label (self, text=f'{self.demo_stage}/21', font=('Montserrat', self.FONTSIZE))
 
@@ -830,6 +856,8 @@ class DemoMenu(Frame):
         # Place widgets
         self.btn_home.place(relx=0.06, rely =0.07, anchor=CENTER)
         self.lbl_heading.place(relx=0.12, rely=0.07, anchor=W)
+        self.border.place(relx=0.5, rely=0.20, anchor=CENTER)
+        self.border_edge.place(relx=0.5, rely=0.20, anchor=CENTER)
 
         self.lbl_siggen_v.place(relx=0.33, rely=0.17, anchor=CENTER)
         self.lbl_siggen_v_val.place(relx=0.43, rely=0.17, anchor=CENTER)
@@ -843,16 +871,17 @@ class DemoMenu(Frame):
         self.btn_back.place(relx=0.35, rely=0.07, anchor=CENTER)
         self.lbl_stage_num.place(relx=0.40, rely=0.07, anchor=CENTER)
         self.btn_next.place(relx=0.45, rely=0.07, anchor=CENTER)
-        self.btn_reset.place(relx=0.65, rely=0.07, anchor=CENTER)
+        self.btn_reset.place(relx=0.55, rely=0.07, anchor=CENTER)
         self.btn_next_big.place(relx=0.92, rely=0.9, anchor=CENTER)
         self.lbl_connect_first.place(relx=0.85, rely=0.07, anchor=CENTER)  
 
-        self.line.place(relx=0.5, rely = 0.42, anchor=CENTER)      
+        #self.line.place(relx=0.5, rely = 0.42, anchor=CENTER)      
 
         self.radio_siggen_internal.place(relx=0.12, rely=0.17, anchor=CENTER)
         self.radio_siggen_external.place(relx=0.12, rely=0.22, anchor=CENTER)
 
         self.demo_show_info()
+        self.check_connections(master)
 
     def demo_stage_change(self, master, direction):
         """Changes the demo stage"""
@@ -862,19 +891,8 @@ class DemoMenu(Frame):
             self.demo_stage += 1
         self.lbl_stage_num["text"] = f'{self.demo_stage}/21'
 
-        # Arrows are only available when the necessary instruments are connected
-        # if self.demo_stage > self.demo_parts[0]-2:
-        #     self.btn_next['state']=self.check_connections(master)
-        #     self.btn_next_big['state']=self.check_connections(master)
-        # else:
-        #     self.btn_next['state']=NORMAL
-        #     self.btn_next_big['state']=NORMAL
-        # if self.demo_stage > self.demo_parts[0]:
-        #     self.btn_back['state']=self.check_connections(master)
-        # else:
-        #     self.btn_back['state']=NORMAL
-
         self.demo_changesettings()
+        self.check_connections(master)
 
     def reset_labels(self):
         self.lbl_info_1["text"] = ''
@@ -1168,6 +1186,23 @@ class DemoMenu(Frame):
             state = self.check_oscope_connection(master) and self.check_powers_connection(master) and self.check_mmeter_connection(master)
         else:
             state = self.check_siggen_connection(master) and self.check_oscope_connection(master) and self.check_powers_connection(master) and self.check_mmeter_connection(master)
+
+        if state == DISABLED:
+            self.lbl_connect_first['text']='Please connect to an oscilloscope, power supply and multimeter\nfrom the connections menu to run the op-amp demo'
+        else:
+            self.lbl_connect_first['text']=''
+
+        # Arrows are only available when the necessary instruments are connected
+        if self.demo_stage > self.demo_parts[0]-2:
+            self.btn_next['state']=state
+            self.btn_next_big['state']=state
+        else:
+            self.btn_next['state']=NORMAL
+            self.btn_next_big['state']=NORMAL
+        if self.demo_stage > self.demo_parts[0]:
+            self.btn_back['state']=state
+        else:
+            self.btn_back['state']=NORMAL
 
         return state
 
