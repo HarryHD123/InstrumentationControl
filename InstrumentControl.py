@@ -181,11 +181,11 @@ def auto_adjust_timeaxis(oscope, chan, meas_chan=4):
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
 
 
-def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
+def auto_adjust_voltageaxis(oscope, chan, meas_chan=4, offset=0):
     """Automatically adjusts the voltage axis."""
     
     # Voltage axis
-    oscope_offset(oscope, chan, 0)
+    oscope_offset(oscope, chan, offset)
     oscope_trigger_settings(oscope, chan)
     measurement_channel_setup(oscope, meas_chan, 'PEAK', chan)
     voltage = read_measurement(oscope, meas_chan)
@@ -209,13 +209,20 @@ def auto_adjust_voltageaxis(oscope, chan, meas_chan=4):
         vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
 
 
-def auto_adjust(oscope, chan, meas_chan=4):
+def auto_adjust(oscope, chan, meas_chan=4, offset=0):
     """Autoscales so the waveform always fits the screen"""
 
-    oscope_offset(oscope, chan, 0)
+    oscope_offset(oscope, chan, offset=offset)
     auto_adjust_timeaxis(oscope, chan, meas_chan)
-    auto_adjust_voltageaxis(oscope, chan, meas_chan)
+    auto_adjust_voltageaxis(oscope, chan, meas_chan, offset=offset)
     
+
+def manual_adjust(oscope, chan, v, f, offset=0):
+    """Adjusts channel timebase and voltage scale.""",
+    command(oscope, f"CHANnel{chan}:RANGe {v}")
+    oscope_offset(oscope, chan, offset) 
+    command(oscope, f"TIMebase:RANGe {2/f}")
+
 
 def full_measure(oscope, meas_chan, meas_type, source_chan_1):
     measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1)
@@ -258,12 +265,12 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
     return value
 
 
-def acquire_waveform(oscope, chan, plot_graph=False, adjust=True):
+def acquire_waveform(oscope, chan, plot_graph=False, adjust=True, offset=0):
     """Acquire waveform."""
 
     # SET UP CHANNEL
     if adjust:
-        auto_adjust(oscope, chan)
+        auto_adjust(oscope, chan, offset=offset)
 
     command(oscope, 'CHAN1:TYPE HRES')
     command(oscope, 'FORM UINT,16;FORM?')
@@ -527,9 +534,8 @@ def powers_set_powers(powers, v, I, chan=1):
     """Turns on and sets a powers supply channel"""
 
     command(powers, f"INSTrument:NSELect {chan}")
+    command(powers, f"APPLY '{v},{I}'")
     command(powers, "OUTP ON")
-    command(powers, "CURR {I}")
-    command(powers, "VOLT {v}")
 
 
 def powers_chan_off(powers, chan=1):
@@ -551,10 +557,10 @@ def powers_chan_on(powers, chan=1):
 if __name__ == "__main__":
     oscope = connect_instrument(oscilloscope1_string)
     #mmeter = connect_instrument(multimeter1_string)
-    #powers = connect_instrument(powersupply1_string)
-    #siggen = connect_instrument(signalgenerator1_string, read_termination="", write_termination="")
+    powers = connect_instrument(powersupply1_string)
+    siggen = connect_instrument(signalgenerator1_string, read_termination="", write_termination="")
     #instruments = [oscope, mmeter, powers, siggen]
-    instruments = [oscope]
+    instruments = [oscope, powers, siggen]
     for instrument in instruments:
         try:
             req_info(instrument)
@@ -562,9 +568,14 @@ if __name__ == "__main__":
         except Exception:
             print(f"Connection to {str(instrument)} failed")
 
+    #powers_chan_off(powers)
+    print("HERE")
+    siggen_set_siggen(siggen, 2, 1000)
+    #powers_set_powers(powers, 7, 3, 1)
+    #powers_set_powers(powers, 7, 3, 2)
     #command(oscope, f"TIMebase:RANGe 0.002")
-    auto_adjust(oscope, 1)
-    acquire_waveform(oscope, 1, plot_graph=True)
+    #auto_adjust(oscope, 1)
+    #acquire_waveform(oscope, 1, plot_graph=True)
 
     #oscope_set_siggen(oscope, 1, 1000, offset=0)
     #oscope_default_settings(oscope, 1)
