@@ -381,13 +381,15 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
     v_out_list = []
     if meas_phase != None:
         phase_list = []
+    else:
+        phase = 'n/a'
     results_dict = {} 
  
     # Run tests
     for v in vin_PP:
         if siggen == None:
             command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
-        command(oscope, f"CHANnel1:RANGe {v*1.2}") # Adjust input channel to correctly read the input voltage
+        command(oscope, f"CHANnel1:RANGe {v*1.4}") # Adjust input channel to correctly read the input voltage
         for f in frequencies:
             print(v, f)
             if siggen == None:

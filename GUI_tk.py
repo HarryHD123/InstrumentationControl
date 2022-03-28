@@ -1,5 +1,7 @@
 from tkinter import *
 import shelve
+
+from numpy import byte
 from InstrumentControl import *
 from DataManagement import *
 from GraphTools import EmbedGraph
@@ -264,11 +266,10 @@ class OscilloscopeMenu(Frame):
         self.lbl_wavetype = Label (self, text='Wave type', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_testing = Label (self, text='', font=('Montserrat', 10), fg = 'red')
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from\nthe connections menu to acquire waveform', fg ='red', font=('Montserrat', 10))
+        self.btn_export = Button (self, state=DISABLED, command=lambda:[self.export()], text = 'Export', font=('Montserrat', self.FONTSIZE))
         self.btn_set_siggen = Button (self, state=self.check_connections(master), command=lambda:[self.entry_update_values(), self.set_siggen(master, self.voltage, self.frequency, self.dc_offset, wave_type=self.detect_wavetype())], text = 'Set Signal Generator', height=2, width=18, font=('Montserrat', self.FONTSIZE))
-        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.show_testing_label(), self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2))], text = 'Acquire Waveforms', height=2, width=16, font=('Montserrat', self.FONTSIZE))
+        self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.show_testing_label(), self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2)), self.check_export()], text = 'Acquire Waveforms', height=2, width=16, font=('Montserrat', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(OscilloscopeMenu)], text = 'RESET', font=('Montserrat', self.FONTSIZE), fg = 'red')
-        self.btn_export = Button (self, state=self.check_export(), command=lambda:[self.export()], text = 'Export', font=('Montserrat', self.FONTSIZE))
-
         # Create entries and radio buttons
         vcmd = self.register(self.callback_num)
         vcmd_neg = self.register(self.callback_num_neg)
@@ -336,6 +337,7 @@ class OscilloscopeMenu(Frame):
 
     def show_testing_label(self):
         self.lbl_testing["text"] = 'Acquiring waveforms\nPlease wait'
+        self.btn_export['fg'] = self.btn_home['fg']
 
     def update_live_graph(self, oscope, chan1=1, chan2=2):
         times, voltages = acquire_waveform(oscope, chan1, adjust=self.adjust, offset=self.dc_offset)
@@ -351,18 +353,20 @@ class OscilloscopeMenu(Frame):
     def check_export(self):
         """Checks there is data to be exported"""
         if self.data_g1 != None and self.data_g2 != None:
-            return NORMAL
+            self.btn_export['state'] = NORMAL
         else:
-            return DISABLED
+            self.btn_export['state'] = DISABLED
 
     def export(self):
         """Exports data to a .csv file"""
-        with open('Oscilloscope_Graph1.csv', 'wb') as g1:
+        with open('Oscilloscope_Graph1.csv', 'wt') as g1:
             writer = csv.writer(g1)
+            print(self.data_g1)
             writer.writerows(self.data_g1)
-        with open('Oscilloscope_Graph1.csv', 'wb') as g2:
+        with open('Oscilloscope_Graph2.csv', 'wt') as g2:
             writer = csv.writer(g2)
             writer.writerows(self.data_g2)
+        self.btn_export['fg'] = 'green'
 
     def check_connections(self, master):
         if master.siggen_setting == None:
@@ -578,9 +582,9 @@ class FreqRespMenu(Frame):
         self.lbl_cutoff = Label (self, text='Cutoff (dB)', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_testing = Label (self, text='', fg='red', font=('Montserrat', 10))
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope from the connections\nmenu to measure the frequency response', fg='red', font=('Montserrat', 10))
-        self.btn_acquire_freqresp = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.acquire_results(master.oscope, siggen=master.siggen_setting), self.check_freq_response_calc(self.btn_acquire_freqresp), self.update_freq_resp_plot()], text = 'Measure\nFrequency Response', height=2, width=17, font=('Montserrat', self.FONTSIZE))
+        self.btn_export = Button (self, state=DISABLED, command=lambda:[self.export()], text = 'Export', font=('Montserrat', self.FONTSIZE))
+        self.btn_acquire_freqresp = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.entry_update_values(), self.show_testing_label(), self.acquire_results(master.oscope, siggen=master.siggen_setting), self.check_results(self.btn_acquire_freqresp), self.update_freq_resp_plot(), self.check_results(self.btn_export)], text = 'Measure\nFrequency Response', height=2, width=17, font=('Montserrat', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(FreqRespMenu)], text = 'RESET', font=('Montserrat', self.FONTSIZE), fg = 'red')
-        self.btn_export = Button (self, state=self.check_export(), command=lambda:[self.export()], text = 'Export', font=('Montserrat', self.FONTSIZE))
 
         # Create entries and radio buttons
         vcmd = self.register(self.callback_num)
@@ -634,6 +638,7 @@ class FreqRespMenu(Frame):
 
     def show_testing_label(self):
         self.lbl_testing["text"] = 'Testing circuit\nPlease wait'
+        self.btn_export['fg'] = self.btn_home['fg']
 
     def acquire_results(self, oscope, siggen=None):
         self.results = test_circuit(oscope, [self.voltages], self.frequencies, siggen=siggen)
@@ -644,32 +649,29 @@ class FreqRespMenu(Frame):
         self.freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq], size = (11,6.8))
         self.freq_resp_plot.place(relx=0.62, rely=0.55, anchor=CENTER)
 
-    def check_freq_response_calc(self, button):
-        """Changes the state of the frequency response button"""
+    def check_results(self, button):
+        """Changes the state of buttons if there are results"""
         # If the STATE is NORMAL
         if self.results != None:
             button['state'] = NORMAL
         else:
             button['state'] = DISABLED
 
-    def check_export(self):
-        """Checks there is data to be exported"""
-        if self.results != None and self.freq_resp_dB != None and self.cutoff_freq != None:
-            return NORMAL
-        else:
-            return DISABLED
-
     def export(self):
         """Exports data to a .csv file"""
-        with open('FreqResp_raw_results.csv', 'wb') as res:
-            writer = csv.writer(res)
-            writer.writerows(self.results)
-        with open('FreqResp_dB_data.csv', 'wb') as dB:
-            writer = csv.writer(dB)
-            writer.writerows(self.freq_resp_dB)
-        with open('FreqResp_cutoff_freq.csv', 'wb') as cutoff:
-            writer = csv.writer(cutoff)
-            writer.writerows(self.cutoff_freq)
+        if self.results != None:
+            with open('FreqResp_raw_results.csv', 'wt') as res:
+                writer = csv.writer(res)
+                writer.writerows(self.results)
+        if self.freq_resp_dB != None:
+            with open('FreqResp_dB_data.csv', 'wt') as dB:
+                writer = csv.writer(dB)
+                writer.writerows([self.freq_resp_dB])
+        if self.cutoff_freq != None:
+            with open('FreqResp_cutoff_freq.csv', 'wt') as cutoff:
+                writer = csv.writer(cutoff)
+                writer.writerow(self.cutoff_freq)
+        self.btn_export['fg'] = 'green'
 
     def check_oscope_connection(self, master):
         """Checks if oscope is connected"""
