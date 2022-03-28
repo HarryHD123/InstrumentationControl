@@ -338,11 +338,11 @@ class OscilloscopeMenu(Frame):
         self.lbl_testing["text"] = 'Acquiring waveforms\nPlease wait'
 
     def update_live_graph(self, oscope, chan1=1, chan2=2):
-        times, voltages = acquire_waveform(oscope, chan1, adjust=self.adjust1)
+        times, voltages = acquire_waveform(oscope, chan1, adjust=self.adjust, offset=self.dc_offset)
         self.data_g1 = [times, voltages]
         self.live_plot = EmbedGraph((times,voltages), heading=f'Waveform Channel {chan1}', y_label='Voltage (V)', x_label='Time (s)', size = (7.5,5))
         self.live_plot.place(relx=0.25, rely=0.68, anchor=CENTER)
-        times2, voltages2 = acquire_waveform(oscope, chan2, adjust=self.adjust2)
+        times2, voltages2 = acquire_waveform(oscope, chan2, adjust=self.adjust, offset=self.dc_offset)
         self.data_g2 = [times2, voltages2]
         self.live_plot2 = EmbedGraph((times2,voltages2), heading=f'Waveform Channel {chan2}', y_label='Voltage (V)', x_label='Time (s)', size = (7.5,5), colour = 'r')
         self.live_plot2.place(relx=0.75, rely=0.68, anchor=CENTER)
@@ -831,12 +831,9 @@ class DemoMenu(Frame):
 
         self.lbl_connect_first = Label (self, text='Please connect to an oscilloscope, power supply and multimeter\nfrom the connections menu to run the op-amp demo', fg='red', font=('Montserrat', 10))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(DemoMenu)], text = 'RESTART DEMO', font=('Montserrat', self.FONTSIZE), fg = 'red')
-        self.btn_next = Button (self, command=lambda:[self.demo_stage_change(master, 'next'), self.demo_show_info(), self.demo_run(master)], text = '→', font=('Montserrat', self.FONTSIZE+10))
-        self.btn_back = Button (self, command=lambda:[self.demo_stage_change(master, 'back'), self.demo_show_info(), self.demo_run(master)], text = '←', font=('Montserrat', self.FONTSIZE+10))
-        self.btn_next_big = Button (self, command=lambda:[self.demo_stage_change(master, 'next'), self.demo_show_info(), self.demo_run(master)], text = 'Next', height=2, width=7, font=('Montserrat', self.FONTSIZE), fg = 'green')
-
-        #self.line = Canvas (self, width=2000)
-        #self.line.create_line(1, 10, 10000, 10, width=1)
+        self.btn_next = Button (self, command=lambda:[self.demo_stage_change(master, 'next'), self.demo_run(master), self.demo_show_info()], text = '→', font=('Montserrat', self.FONTSIZE+10))
+        self.btn_back = Button (self, command=lambda:[self.demo_stage_change(master, 'back'), self.demo_run(master), self.demo_show_info()], text = '←', font=('Montserrat', self.FONTSIZE+10))
+        self.btn_next_big = Button (self, command=lambda:[self.demo_stage_change(master, 'next'), self.demo_run(master), self.demo_show_info()], text = 'Next', height=2, width=7, font=('Montserrat', self.FONTSIZE), fg = 'green')
 
         self.radio_siggen_internal = Radiobutton (self, text = 'Internal signal generator', variable=self.tk_siggen_selected, value=1, command=lambda:[self.select_siggen(master)], font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2, activebackground=master.dblue2, activeforeground=master.white, selectcolor=master.dblue2)
         self.radio_siggen_external = Radiobutton (self, state=self.check_siggen_connection(master), text = 'External signal generator', variable=self.tk_siggen_selected, value=2, command=lambda:[self.select_siggen(master)], font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2, activebackground=master.dblue2, activeforeground=master.white, selectcolor=master.dblue2)
@@ -873,9 +870,7 @@ class DemoMenu(Frame):
         self.btn_next.place(relx=0.45, rely=0.07, anchor=CENTER)
         self.btn_reset.place(relx=0.55, rely=0.07, anchor=CENTER)
         self.btn_next_big.place(relx=0.92, rely=0.9, anchor=CENTER)
-        self.lbl_connect_first.place(relx=0.85, rely=0.07, anchor=CENTER)  
-
-        #self.line.place(relx=0.5, rely = 0.42, anchor=CENTER)      
+        self.lbl_connect_first.place(relx=0.85, rely=0.07, anchor=CENTER)      
 
         self.radio_siggen_internal.place(relx=0.12, rely=0.17, anchor=CENTER)
         self.radio_siggen_external.place(relx=0.12, rely=0.22, anchor=CENTER)
@@ -911,6 +906,8 @@ class DemoMenu(Frame):
 
     def demo_show_info(self):
         self.reset_labels()
+        self.R1 = 1
+        self.R2 = 10
         if self.demo_stage == 1:
             self.lbl_info_1["text"] = "This demonstration is designed to teach you about saturation."
             self.lbl_info_2["text"] = "The circuit below shows the inverting op-amp circuit which will be used to carry out the following demonstration."
@@ -930,10 +927,9 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.25, rely=0.6, anchor=CENTER)
             self.lbl_img2.place(relx=0.70, rely=0.57, anchor=CENTER)
         elif self.demo_stage == 3:
-            # multimeter pic
-            self.lbl_info_1["text"] = "Connect the multimeter as shown below."
-            self.lbl_info_2["text"] = "The multimeter will be used to verify the voltage of the power supply."
-            self.lbl_img["image"] = self.load_image("Images\op_amp_circ.png", new_size = (750, 400))
+            self.lbl_info_1["text"] = "The multimeter will be used to verify the voltage of the power supply."
+            self.lbl_info_2["text"] = "Connect the multimeter clips to +Vcc and -Vcc."
+            self.lbl_img["image"] = self.load_image("Images\Multimeter.jpg", new_size = (750, 400))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.87, anchor=CENTER)
             self.lbl_img.place(relx=0.5, rely=0.59, anchor=CENTER)
@@ -954,7 +950,7 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.5, rely=0.59, anchor=CENTER)
         elif self.demo_stage == 7:
             # Change pic from 15V to 7V
-            self.lbl_info_1["text"] = f"1. The power supply is set to output + and - {self.powers_v}V."
+            self.lbl_info_1["text"] = f"1. Channel 1 and 2 of the power supply are set to output + and - {self.powers_v}V respectively."
             self.lbl_img["image"] = self.load_image("Images\power_supply_set.png", new_size = (750, 400))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_img.place(relx=0.5, rely=0.59, anchor=CENTER)
@@ -962,8 +958,8 @@ class DemoMenu(Frame):
             # Enter values and pic
             self.lbl_info_1["text"] = "2. Verify the power supply output with the multimeter."
             self.lbl_info_2["text"] = "The multimeter allows the output voltage to be confirmed.\nVerification is a useful step to take when running an experiment as it reduces the chance of human and mechanical error."
-            self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V"
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: "
+            self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
             self.lbl_info_3.place(relx=0.5, rely=0.65, anchor=CENTER)
@@ -972,9 +968,9 @@ class DemoMenu(Frame):
             # Enter values
             self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_2["text"] = "Using the equation below"
-            self.lbl_info_3["text"] = f"R2 = Ω"
-            self.lbl_info_4["text"] = f"R1 = Ω"
-            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be "
+            self.lbl_info_3["text"] = f"R2 = {self.R2}kΩ"
+            self.lbl_info_4["text"] = f"R1 = {self.R1}kΩ"
+            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation means there is a phase shift of 180 degrees at the output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -984,15 +980,15 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.5, rely=0.50, anchor=CENTER)
         elif self.demo_stage == 10:
             # Complete + pic
-            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V."
+            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V at a frequency of {self.frequency}Hz."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 11:
             # Enter values
             self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
             self.lbl_info_2["text"] = "Using the equation below"
-            self.lbl_info_3["text"] = f"Vout = V"
-            self.lbl_info_4["text"] = f"Vin = V"
-            self.lbl_info_5["text"] = f"Therefore, the actual gain is . Which matches the calculated gain."
+            self.lbl_info_3["text"] = f"Vout = {self.Vout}V"
+            self.lbl_info_4["text"] = f"Vin = {self.Vin}V"
+            self.lbl_info_5["text"] = f"Therefore, the actual gain is {self.calc_gain_inverting_opamp(self.Vin, self.Vout):.4f}. Which matches the calculated gain of {self.gain}."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_v.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1002,7 +998,7 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.5, rely=0.50, anchor=CENTER)
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 12:
-            self.lbl_info_1["text"] = f"1. The power supply is set to output + and - {self.powers_v}V."
+            self.lbl_info_1["text"] = f"1. Channel 1 and 2 of the power supply are set to output + and - {self.powers_v}V."
             self.lbl_info_2["text"] = "This is the same as before to show that input power is the limiting factor in achieving gain."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1010,8 +1006,8 @@ class DemoMenu(Frame):
             # Enter values and pic
             self.lbl_info_1["text"] = "2. Verify the power supply output with the multimeter."
             self.lbl_info_2["text"] = "Although the power supply settings have not changed, it is useful to verify the power supply voltage to show a lack of power is the cause of saturation."
-            self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V"
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: "
+            self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
             self.lbl_info_3.place(relx=0.5, rely=0.65, anchor=CENTER)
@@ -1020,9 +1016,9 @@ class DemoMenu(Frame):
             # Enter values
             self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_2["text"] = "Using the equation below"
-            self.lbl_info_3["text"] = f"R2 = Ω"
-            self.lbl_info_4["text"] = f"R1 = Ω"
-            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be "
+            self.lbl_info_3["text"] = f"R2 = {self.R2}kΩ"
+            self.lbl_info_4["text"] = f"R1 = {self.R1}kΩ"
+            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation means there is a phase shift of 180 degrees at the output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1032,15 +1028,15 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.5, rely=0.50, anchor=CENTER)
         elif self.demo_stage == 15:
             # Complete + pic
-            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V."
+            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V at a frequency of {self.frequency}Hz."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 16:
             # Enter values
             self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
             self.lbl_info_2["text"] = "Using the equation below"
-            self.lbl_info_3["text"] = f"Vout = V"
-            self.lbl_info_4["text"] = f"Vin = V"
-            self.lbl_info_5["text"] = f"Therefore, the actual gain is . Which is lower than the calculated gain.\nThis is due to the power supply being set too low to be able to amplify the signal generators voltage sufficiently."
+            self.lbl_info_3["text"] = f"Vout = {self.Vout}V"
+            self.lbl_info_4["text"] = f"Vin = {self.Vin}V"
+            self.lbl_info_5["text"] = f"Therefore, the actual gain is {self.calc_gain_inverting_opamp(self.Vin, self.Vout):.4f}. Which is lower than the calculated gain of {self.gain}.\nThis is due to the power supply being set too low to be able to amplify the signal generators voltage sufficiently."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_v.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1060,8 +1056,8 @@ class DemoMenu(Frame):
             # Enter values and pic
             self.lbl_info_1["text"] = "2. Verify the power supply output with the multimeter."
             self.lbl_info_2["text"] = "The power supply has had its output increased so it is especially important to verify this change has taken effect."
-            self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V"
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: "
+            self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
             self.lbl_info_3.place(relx=0.5, rely=0.65, anchor=CENTER)
@@ -1070,9 +1066,9 @@ class DemoMenu(Frame):
             # Enter values
             self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_2["text"] = "Using the equation below"
-            self.lbl_info_3["text"] = f"R2 = Ω"
-            self.lbl_info_4["text"] = f"R1 = Ω"
-            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be "
+            self.lbl_info_3["text"] = f"R2 = {self.R2}kΩ"
+            self.lbl_info_4["text"] = f"R1 = {self.R1}kΩ"
+            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation means there is a phase shift of 180 degrees at the output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1082,15 +1078,15 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.5, rely=0.50, anchor=CENTER)
         elif self.demo_stage == 20:
             # Complete + pic
-            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V."
+            self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V at a frequency of {self.frequency}Hz."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
         elif self.demo_stage == 21:
             # Enter values
             self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
             self.lbl_info_2["text"] = "Using the equation below"
-            self.lbl_info_3["text"] = f"Vout = V"
-            self.lbl_info_4["text"] = f"Vin = V"
-            self.lbl_info_5["text"] = f"Therefore, the actual gain is . Which matches the calculated gain as the power supply voltage\nhas been increased to provide enough power to achieve the expected amplification."
+            self.lbl_info_3["text"] = f"Vout = {self.Vout}V"
+            self.lbl_info_4["text"] = f"Vin = {self.Vin}V"
+            self.lbl_info_5["text"] = f"Therefore, the actual gain is {self.calc_gain_inverting_opamp(self.Vin, self.Vout):.4f}. Which matches the calculated gain of {self.gain} as the power supply voltage\nhas been increased to provide enough power to achieve the expected amplification."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_v.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1102,32 +1098,27 @@ class DemoMenu(Frame):
 
     def demo_run(self, master):
         if self.demo_stage in self.demo_parts: # Set powers supply
-            print("1")
-            #powers_set_powers(master.powers, self.powers_v, 3, 1) # Connect to positive terminal of chan1
-            #powers_set_powers(master.powers, -self.powers_v, 3, 2) # # Connect to negative terminal of chan1
-            # Connect the unused ports for chan1 and chan2 of power supply together to form ground
+            print("1 - Set power supply")
+            powers_set_powers(master.powers, self.powers_v, 3, 1) # Connect to positive terminal of chan1
+            powers_set_powers(master.powers, self.powers_v, 3, 2) # # Connect to negative terminal of chan1
+            #Connect the unused ports for chan1 and chan2 of power supply together to form ground
         elif self.demo_stage-1 in self.demo_parts: # Check power supply with multimeter
-            print("2")
-            mmeter_v = mmeter_get_voltage(master.mmeter) # Check power supply with multi meter
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {mmeter_v}V"
-            #print("Power supply V", self.powers_v)
-            #print("Power supply V", self.siggen_v)
-            #print("multimeter V", mmeter_v)
-        elif self.demo_stage-2 in self.demo_parts: # Calculate the predicted gain
-            print("3")
-            # Set gain to be 10
-            #gain_predicted = self.calc_gain(1,10)
-            #print("Predicted gain", gain_predicted)
+            print("2 - Multimeter reading")
+            self.mmeter_v = mmeter_get_voltage(master.mmeter) # Check power supply with multi meter
+            self.mmeter_v = f"{float(str(self.mmeter_v)):.4f}"
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V"
+            print("Power supply V", self.powers_v)
+            print("Power supply V", self.siggen_v)
+            print("multimeter V", self.mmeter_v)
+        elif self.demo_stage-2 in self.demo_parts: # Calculate predicted gain
+            self.gain = self.calc_gain_r(self.R1, self.R2)
         elif self.demo_stage-3 in self.demo_parts: # Set the signal generator
-            print("4")
-            #self.set_siggen(master, self.siggen_v, self.frequency)
-            #Vin = full_measure(master.oscope, 1, 'PEAK', 1) # Vin
-            #Vout = full_measure(master.oscope, 2, 'PEAK', 2) # Vout
-        elif self.demo_stage-4 in self.demo_parts: # Measure the actual gain - comment on what this means
-            print("5")
-            #gain_measured = self.calc_gain(Vout/Vin)
-            #print("Measured gain", gain_measured)
-            # Gain should 10 as predicted, however, this is limited by the voltage of the power supply
+            print("4 - Set siggen")
+            self.set_siggen(master, self.siggen_v, self.frequency)
+            manual_adjust(master.oscope, 1, self. siggen_v*1.5, self.frequency)
+            manual_adjust(master.oscope, 2, self.siggen_v*self.gain*1.5, self.frequency)
+            self.Vin = full_measure(master.oscope, 1, 'PEAK', 1) # Vin
+            self.Vout = full_measure(master.oscope, 2, 'PEAK', 2) # Vout
         else:
             pass
 
@@ -1171,8 +1162,12 @@ class DemoMenu(Frame):
             self.lbl_powers_pos_val['text'] = f"{self.powers_v}"
             self.lbl_powers_neg_val['text'] = f"-{self.powers_v}"
 
-    def calc_gain(self, input, output):
-        gain = output/input
+    def calc_gain_r(self, R1, R2):
+        gain = R2/R1
+        return gain
+
+    def calc_gain_inverting_opamp(self, Vin, Vout):
+        gain = Vout/Vin
         return gain
 
     def set_siggen(self, master, voltage, frequency, offset=0, wave_type='Sine'):
