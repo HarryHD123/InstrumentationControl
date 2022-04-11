@@ -11,9 +11,12 @@ def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False
         plt.semilogx()
     if cutoff_data != None:
         if cutoff_data[1] != None:
-            for p in cutoff_data[1]:
-                plt.annotate(f'{cutoff_data[0]}dB Cutoff:{cutoff_data[1]:.0f}Hz', xy=[cutoff_data[1][p],cutoff_data[0]], xytext=(7, 0), textcoords=('offset points'))
-                plt.plot(p, cutoff_data[0], color='r', marker='x', markersize='10')
+            print("CUTOFF DATA", cutoff_data)
+            print("CUTOFF DATA [1]", cutoff_data[1])
+            #for p in cutoff_data[1]:
+            #    print("P in data[1]", p)
+            plt.annotate(f'{cutoff_data[0]}dB Cutoff:{cutoff_data[1]:.0f}Hz', xy=[cutoff_data[1],cutoff_data[0]], xytext=(7, 0), textcoords=('offset points'))
+            plt.plot(cutoff_data[1], cutoff_data[0], color='r', marker='x', markersize='10')
                 
     plt.rc('axes', labelsize=10)
     plt.ylabel(f'{y_label}')

@@ -1,7 +1,12 @@
+# Instrumentation Control Application
+
+# Author: Harry Hamilton-Deeley
+
 from tkinter import *
 import shelve
-
-from numpy import byte
+import matplotlib
+import numpy
+import scipy
 from InstrumentControl import *
 from DataManagement import *
 from GraphTools import EmbedGraph
@@ -12,11 +17,13 @@ class InstrumentationControlApp(Tk):
     def __init__(self):
         Tk.__init__(self)
         self._frame = None
-        self.oscope = True
-        self.siggen = True
+
+        self.oscope = None
+        self.siggen = None
+        self.mmeter = None
+        self.powers = None
+
         self.siggen_setting = None
-        self.mmeter = True
-        self.powers = True
 
         self.white = '#f1f1f1'
         self.white2 = '#fefeff'
@@ -143,6 +150,11 @@ class ConnectionMenu(Frame):
         self.btn_connect_all.place(relx=0.1, rely=0.62, anchor=CENTER)
         self.btn_reset.place(relx=0.45, rely=0.62, anchor=CENTER)
 
+        self.check_oscope_connection(master)
+        self.check_siggen_connection(master)
+        self.check_mmeter_connection(master)
+        self.check_powers_connection(master)
+
     def connect(self, master, instrument):
         if instrument == 'oscope':
             master.oscope = connect_instrument(self.oscilloscope1_string)
@@ -181,6 +193,34 @@ class ConnectionMenu(Frame):
                     self.change_connect_state(instr_lbl[i], 'On')
                 else:
                     self.change_connect_state(instr_lbl[i], 'Off')
+
+    def check_oscope_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.oscope != None:
+            self.change_connect_state(self.lbl_oscope_connect, 'On')
+        else:
+            self.change_connect_state(self.lbl_oscope_connect, 'Off')
+
+    def check_siggen_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.siggen != None:
+            self.change_connect_state(self.lbl_siggen_connect, 'On')
+        else:
+            self.change_connect_state(self.lbl_siggen_connect, 'Off')
+
+    def check_powers_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.powers != None:
+            self.change_connect_state(self.lbl_powers_connect, 'On')
+        else:
+            self.change_connect_state(self.lbl_powers_connect, 'Off')
+    
+    def check_mmeter_connection(self, master):
+        """Checks if oscope is connected"""
+        if master.mmeter != None:
+            self.change_connect_state(self.lbl_mmeter_connect, 'On')
+        else:
+            self.change_connect_state(self.lbl_mmeter_connect, 'Off')
 
     def change_connect_state(self, button, state):
         """Changes the connection state"""
@@ -558,6 +598,7 @@ class FreqRespMenu(Frame):
         # Read inital settings
         self.Reset()
         self.ReadSettings()
+        self.res_freq_det = 2
 
         # Create text Variables
         self.tk_voltages = StringVar(self, self.voltages)
@@ -568,6 +609,7 @@ class FreqRespMenu(Frame):
         self.tk_cutoff_dB = IntVar(self, self.cutoff_dB)
         self.tk_siggen_selected = IntVar(self, self.detect_siggen(master))
         self.tk_coupling = IntVar(self, self.detect_coupling())
+        self.tk_res_freq_det = IntVar(self, self.res_freq_det)
 
         # Create buttons and labels
         self.border_edge = Label (self, bg = master.lblue, height=43, width=50)
@@ -642,10 +684,17 @@ class FreqRespMenu(Frame):
 
     def acquire_results(self, oscope, siggen=None):
         self.results = test_circuit(oscope, [self.voltages], self.frequencies, siggen=siggen)
+        self.freq_resp, self.freq_resp_dB, self.res_freqs, self.frequencies_inc_res = calc_freq_response(self.results, [self.voltages], self.frequencies, self.res_freq_det)
+        if self.res_freq_det != None:
+            self.results_res = test_circuit(oscope, [self.voltages], self.res_freqs)
+            self.freq_resp_res, self.freq_resp_dB_res = calc_freq_resp_resfreq(self.results_res, [self.voltages], self.res_freqs)
+            self.results, self.freq_resp, self.freq_resp_dB = combine_res_data(self.results, self.results_res, self.freq_resp, self.freq_resp_dB, self.freq_resp_res, self.freq_resp_dB_res, self.res_freqs, self.frequencies_inc_res)
+            self.cutoff_freq = calc_cutoff_freq(self.freq_resp_dB, self.frequencies_inc_res, self.cutoff_dB)
+        else:
+            self.cutoff_freq = calc_cutoff_freq(self.freq_resp_dB, self.frequencies, self.cutoff_dB)
         self.lbl_testing["text"] = ""
 
     def update_freq_resp_plot(self):
-        self.freq_resp, self.freq_resp_dB, self.cutoff_freq = calc_freq_response(self.results, [self.voltages], self.frequencies, self.cutoff_dB)
         self.freq_resp_plot = EmbedGraph((self.frequencies,self.freq_resp_dB), heading='Frequency Response', y_label='Gain (dB)', x_label='Frequency (Hz)', log_graph=True, cutoff_data=[self.cutoff_dB, self.cutoff_freq], size = (11,6.8))
         self.freq_resp_plot.place(relx=0.62, rely=0.55, anchor=CENTER)
 
@@ -912,7 +961,7 @@ class DemoMenu(Frame):
         self.R2 = 10
         if self.demo_stage == 1:
             self.lbl_info_1["text"] = "This demonstration is designed to teach you about saturation."
-            self.lbl_info_2["text"] = "The circuit below shows the inverting op-amp circuit which will be used to carry out the following demonstration."
+            self.lbl_info_2["text"] = "The circuit is the inverting op-amp amplifier which will be used to carry out the following demonstration."
             self.lbl_img["image"] = self.load_image("Images\op_amp_circ2.png", new_size = (700, 400))
             self.lbl_img2["image"] = self.load_image("Images\circ_genV.png", new_size = (400, 400), num = 2)
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
@@ -921,7 +970,7 @@ class DemoMenu(Frame):
             self.lbl_img2.place(relx=0.75, rely=0.65, anchor=CENTER)
         elif self.demo_stage == 2:
             self.lbl_info_1["text"] = "Connect the power supply as shown below."
-            self.lbl_info_2["text"] = "Connect the positive side of channel 1 to Vcc and the negative side of channel 2 to -Vcc."
+            self.lbl_info_2["text"] = "Connect the positive side of channel 2 to +Vcc and the negative side of channel 1 to -Vcc."
             self.lbl_img["image"] = self.load_image("Images\power_supply_con.png", new_size = (500, 400))
             self.lbl_img2["image"] = self.load_image("Images\circ_powers_con.png", new_size = (700, 250), num = 2)
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
@@ -929,22 +978,26 @@ class DemoMenu(Frame):
             self.lbl_img.place(relx=0.25, rely=0.6, anchor=CENTER)
             self.lbl_img2.place(relx=0.70, rely=0.57, anchor=CENTER)
         elif self.demo_stage == 3:
-            self.lbl_info_1["text"] = "The multimeter will be used to verify the voltage of the power supply."
-            self.lbl_info_2["text"] = "Connect the multimeter clips to +Vcc and -Vcc."
-            self.lbl_img["image"] = self.load_image("Images\Multimeter.jpg", new_size = (750, 400))
+            self.lbl_info_1["text"] = "The multimeter will be used to verify the total voltage provided by the power supply."
+            self.lbl_info_2["text"] = "Connect the multimeter to +Vcc and -Vcc."
+            self.lbl_img["image"] = self.load_image("Images\Multimeter_con.jpg", new_size = (750, 400))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.87, anchor=CENTER)
             self.lbl_img.place(relx=0.5, rely=0.59, anchor=CENTER)
         elif self.demo_stage == 4:
-            self.lbl_info_1["text"] = "The gain can be predicted using the formula:"
+            self.lbl_info_1["text"] = "The gain can be for an inverting op-amp is given using the formula:"
+            self.lbl_info_2["text"] = "The gain calculated is the gain you would predict the circuit to output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (500, 300))
             self.lbl_info_1.place(relx=0.5, rely=0.35, anchor=CENTER)
+            self.lbl_info_2.place(relx=0.5, rely=0.82, anchor=CENTER)
             self.lbl_img.place(relx=0.5, rely=0.59, anchor=CENTER)
         elif self.demo_stage == 5:
             self.lbl_info_1["text"] = "Connect the signal generator as shown below."
             self.lbl_img["image"] = self.load_image("Images\circ_siggen_con.png", new_size = (600, 460))
+            #self.lbl_img2["image"] = self.load_image("Images\siggen_con.png", new_size = (600, 460))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
-            self.lbl_img.place(relx=0.5, rely=0.63, anchor=CENTER)
+            self.lbl_img.place(relx=0.25, rely=0.63, anchor=CENTER)
+            #self.lbl_img2.place(relx=0.70, rely=0.63, anchor=CENTER)
         elif self.demo_stage == 6:
             self.lbl_info_1["text"] = "The achieved gain can be found by measuring the input and output voltage and using the formula:"
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_v.png", new_size = (500, 300))
@@ -962,17 +1015,21 @@ class DemoMenu(Frame):
             self.lbl_info_2["text"] = "The multimeter allows the output voltage to be confirmed.\nVerification is a useful step to take when running an experiment as it reduces the chance of human and mechanical error."
             self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
             self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
+            self.lbl_img["image"] = self.load_image("Images\power_supply.png", new_size = (550, 300))
+            self.lbl_img2["image"] = self.load_image("Images\Multimeter.jpg", new_size = (550, 300))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
             self.lbl_info_3.place(relx=0.5, rely=0.65, anchor=CENTER)
             self.lbl_info_4.place(relx=0.5, rely=0.70, anchor=CENTER)
+            self.lbl_img.place(relx=0.25, rely=0.5, anchor=CENTER)
+            self.lbl_img2.place(relx=0.75, rely=0.5, anchor=CENTER)
         elif self.demo_stage == 9:
             # Enter values
             self.lbl_info_1["text"] = "3. Calculate the predicted gain."
             self.lbl_info_2["text"] = "Using the equation below"
             self.lbl_info_3["text"] = f"R2 = {self.R2}kΩ"
             self.lbl_info_4["text"] = f"R1 = {self.R1}kΩ"
-            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation means there is a phase shift of 180 degrees at the output."
+            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation denotes a phase shift of 180 degrees at the output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1020,7 +1077,7 @@ class DemoMenu(Frame):
             self.lbl_info_2["text"] = "Using the equation below"
             self.lbl_info_3["text"] = f"R2 = {self.R2}kΩ"
             self.lbl_info_4["text"] = f"R1 = {self.R1}kΩ"
-            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation means there is a phase shift of 180 degrees at the output."
+            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation denotes a phase shift of 180 degrees at the output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1070,7 +1127,7 @@ class DemoMenu(Frame):
             self.lbl_info_2["text"] = "Using the equation below"
             self.lbl_info_3["text"] = f"R2 = {self.R2}kΩ"
             self.lbl_info_4["text"] = f"R1 = {self.R1}kΩ"
-            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation means there is a phase shift of 180 degrees at the output."
+            self.lbl_info_5["text"] = f"Therefore, the gain can be predicted to be {self.gain}.\nThe - in the equation denotes a phase shift of 180 degrees at the output."
             self.lbl_img["image"] = self.load_image("Images\eq_inv_gain_r.png", new_size = (125, 75))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
@@ -1099,6 +1156,7 @@ class DemoMenu(Frame):
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
 
     def demo_run(self, master):
+        self.check_connections(master)
         if self.demo_stage in self.demo_parts: # Set powers supply
             print("1 - Set power supply")
             powers_set_powers(master.powers, self.powers_v, 3, 1) # Connect to positive terminal of chan1
@@ -1180,10 +1238,9 @@ class DemoMenu(Frame):
 
     def check_connections(self, master):
         if master.siggen_setting == None:
-            state = self.check_oscope_connection(master) and self.check_powers_connection(master) and self.check_mmeter_connection(master)
+            state = self.check_oscope_connection(master) or self.check_powers_connection(master) or self.check_mmeter_connection(master)
         else:
-            state = self.check_siggen_connection(master) and self.check_oscope_connection(master) and self.check_powers_connection(master) and self.check_mmeter_connection(master)
-
+            state = self.check_siggen_connection(master) or self.check_oscope_connection(master) or self.check_powers_connection(master) or self.check_mmeter_connection(master)
         if state == DISABLED:
             self.lbl_connect_first['text']='Please connect to an oscilloscope, power supply and multimeter\nfrom the connections menu to run the op-amp demo'
         else:

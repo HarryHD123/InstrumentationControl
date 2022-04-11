@@ -1,3 +1,7 @@
+# Instrumentation Control Library
+
+# Author: Harry Hamilton-Deeley
+
 import math
 import pyvisa
 import time
@@ -8,7 +12,6 @@ from GraphTools import plot_freq_resp
 import json
 
 rm = pyvisa.ResourceManager()
-oscope = None
 
 # -------------------------------
 # CONNECTING TO DEVICES
@@ -30,25 +33,25 @@ def command(instrument, command):
 
 def read(instrument, command):
     "Reads from oscilloscope"
-    info = instrument.query(command)
+    data = instrument.query(command)
 
-    return info
+    return data
 
 
 # ------------------
 # SETUP FUNCTIONS SETTINGS
 # -----------------
 
-def connect_instrument(instrument_string, read_termination='\n', write_termination='\n'):
+def connect_instrument(instrument_string, read_termination='\n', write_termination='\n', baud_rate = 512, visa_timeout = 2000, opc_timeout = 10000):
     instrument = None
     try:
         # adjust the VISA Resource string to fit your instrument
         instrument = rm.open_resource(instrument_string)
         instrument.read_termination = read_termination  # Define the last line of an input to be a paragraph break
         instrument.write_termination = write_termination  # Set the output (to the instrument) to be end with a paragraph break
-        instrument.baud_rate = 512  # Set buffer size to be 512
-        instrument.visa_timeout = 10000  # Timeout for VISA Read Operations
-        instrument.opc_timeout = 3000  # Timeout for opc-synchronised operations
+        instrument.baud_rate = baud_rate  # Set buffer size to be 512
+        instrument.visa_timeout = visa_timeout  # Timeout for VISA Read Operations
+        instrument.opc_timeout = opc_timeout  # Timeout for opc-synchronised operations
         instrument.instrument_status_checking = True  # Error check after each command
     except Exception as ex:
         print('Error initializing the instrument ' + instrument_string + ' session:\n' + ex.args[
@@ -62,6 +65,12 @@ def req_info(instrument):
     "Requests information from the oscilloscope"
     idn = read(instrument, '*IDN?')
     print(f"\nHello, I am: '{idn}'")
+
+
+def find_instruments():
+    instruments = rm.list_resources()
+
+    return instruments
 
 
 def connect_all_instruments(oscilloscope1_string = 'TCPIP0::192.168.1.2::inst0::INSTR', multimeter1_string = 'TCPIP0::192.168.1.5::5025::SOCKET', signalgenerator1_string = 'TCPIP0::192.168.1.3::inst0::INSTR', powersupply1_string = 'TCPIP0::192.168.1.4::inst0::INSTR'):
@@ -181,32 +190,33 @@ def auto_adjust_timeaxis(oscope, chan, meas_chan=4):
     command(oscope, f"TIMebase:RANGe {2/(frequency)}")
 
 
-def auto_adjust_voltageaxis(oscope, chan, meas_chan=4, offset=0):
+def auto_adjust_voltageaxis(oscope, chan, meas_chan=4, offset=0, final_check=True):
     """Automatically adjusts the voltage axis."""
     
     # Voltage axis
-    oscope_offset(oscope, chan, offset)
-    oscope_trigger_settings(oscope, chan)
     measurement_channel_setup(oscope, meas_chan, 'PEAK', chan)
+    oscope_trigger_settings(oscope, chan)
     voltage = read_measurement(oscope, meas_chan)
-    vcheck = 80e-3 # max value
+    vcheck = 0.08 # min scale
 
     while voltage > 10e+10: # If clipping zooms out until a reading can be taken
         command(oscope, f"CHANnel{chan}:RANGe {vcheck}")
+        oscope_offset(oscope, chan, offset)
         oscope_trigger_settings(oscope, chan)
         voltage = read_measurement(oscope, meas_chan)
-        vcheck *= 10
+        vcheck *= 20
 
-    new_range = voltage/0.8
+    new_range = voltage*1.3
     command(oscope, f"CHANnel{chan}:RANGe {new_range}")
         
     oscope_trigger_settings(oscope, chan)
-    vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
-    while vcheck2 > 10e+10:
-        voltage *= 1.2
-        oscope_trigger_settings(oscope, chan)
-        command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+    if final_check:
         vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
+        while vcheck2 > 10e+10:
+            voltage *= 1.2 # Zoom out until whole waveform can be seen
+            oscope_trigger_settings(oscope, chan)
+            command(oscope, f"CHANnel{chan}:RANGe {voltage}")
+            vcheck2 = read_measurement(oscope, meas_chan) # Check for clipping due to offset
 
 
 def auto_adjust(oscope, chan, meas_chan=4, offset=0):
@@ -217,6 +227,9 @@ def auto_adjust(oscope, chan, meas_chan=4, offset=0):
     auto_adjust_voltageaxis(oscope, chan, meas_chan, offset=offset)
     
 
+def auto_adjust_imp(oscope):
+    command(oscope, 'AUToscale')
+
 def manual_adjust(oscope, chan, v, f, offset=0):
     """Adjusts channel timebase and voltage scale.""",
     command(oscope, f"CHANnel{chan}:RANGe {v}")
@@ -224,8 +237,8 @@ def manual_adjust(oscope, chan, v, f, offset=0):
     command(oscope, f"TIMebase:RANGe {2/f}")
 
 
-def full_measure(oscope, meas_chan, meas_type, source_chan_1):
-    measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1)
+def full_measure(oscope, meas_chan, meas_type, source_chan):
+    measurement_channel_setup(oscope, meas_chan, meas_type, source_chan)
     value = read_measurement(oscope, meas_chan)
 
     return value
@@ -242,14 +255,20 @@ def measurement_channel_setup(oscope, meas_chan, meas_type, source_chan_1, sourc
     else:
         command(oscope, f"MEASurement{meas_chan}:SOURce CH{source_chan_1}")
         command(oscope, f"MEASurement{meas_chan}:MAIN {meas_type}")
+    
+    time.sleep(1.5) # Time for the channel to be set up
 
 
-def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
-    """Reads a specified measurement channel."""
+def read_measurement(oscope, meas_chan, meas_type=0, statistics=False, accuracy=1):
+    """Reads a specified measurement channel.
+    Accuracy is on a scale of 0-1. The lower the value the lower the wait time for statistics to be taken, but the greater the chance of an error occuring."""
 
+    oscope.clear()
     if statistics:
+        accuracy = 0.5 # Test
+        wait_time = 2*accuracy
         command(oscope, f"MEASurement{meas_chan}:STATistics:RESet")
-        time.sleep(2.5) # Needed for statistics to be reset and some values taken
+        time.sleep(wait_time) # Needed for statistics to be reset and some values taken
         command(oscope, f"MEASurement{meas_chan}:RESult:AVG?")
     else:
         time.sleep(0.5) # Needed to allow the waveform to settle
@@ -258,10 +277,8 @@ def read_measurement(oscope, meas_chan, meas_type=0, statistics=False):
         else:
             command(oscope, f"MEASurement{meas_chan}:RESult:{meas_type}?")        
 
-    time.sleep(1) # Time for the oscilloscope to load the result
     value_string = oscope.read()
     value = float(value_string)
-
     return value
 
 
@@ -272,7 +289,7 @@ def acquire_waveform(oscope, chan, plot_graph=False, adjust=True, offset=0):
     if adjust:
         auto_adjust(oscope, chan, offset=offset)
 
-    command(oscope, 'CHAN1:TYPE HRES')
+    command(oscope, f'CHAN{chan}:TYPE HRES')
     command(oscope, 'FORM UINT,16;FORM?')
     time.sleep(0.1)
     form = oscope.read()
@@ -326,9 +343,7 @@ def acquire_waveform(oscope, chan, plot_graph=False, adjust=True, offset=0):
     # CONVERTS WAVEFORM DATA TO VALUES
     no_of_data_array_elements = len(waveform_data)
     times = [i * float(x_inc) + float(x_or) for i in range(no_of_data_array_elements)]
-    print(times)
     voltages = waveform_data * float(y_inc) + float(y_or) 
-    print(voltages)
     # PLOT WAVEFORM
     if plot_graph:
         plt.figure(2)
@@ -343,6 +358,35 @@ def acquire_waveform(oscope, chan, plot_graph=False, adjust=True, offset=0):
 
     # RUN THE OSCILLOSCOPE
     command(oscope, 'RUN')
+
+    return times, voltages
+
+
+def acquire_waveform_imp(oscope, chan):
+    """Acquires waveform."""
+
+    command(oscope, '*RST')
+    command(oscope, 'SING;*OPC?')
+    opc = oscope.read()
+    command(oscope, f'CHAN{chan}:TYPE HRES')
+    command(oscope, 'FORM UINT,16')
+
+    # Adjust range
+    auto_adjust_imp(oscope)
+
+    # READ CALCULATION VARIABLES
+    x_or = float(read(oscope, f'CHAN{chan}:DATA:XOR?'))
+    y_or = float(read(oscope, f'CHAN{chan}:DATA:YOR?'))
+    x_inc = float(read(oscope, f'CHAN{chan}:DATA:XINC?'))
+    y_inc = float(read(oscope, f'CHAN{chan}:DATA:YINC?'))
+
+    # DATA ACQUISITION
+    data = oscope.query_binary_values(f'CHAN{chan}:DATA?', datatype='b')
+    
+    # CONVERTS WAVEFORM DATA TO VALUES
+    length = len(data)
+    times = [i * x_inc + x_or for i in range(length)]
+    voltages = [d * y_inc + y_or for d in data] 
 
     return times, voltages
 
@@ -389,7 +433,7 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
     for v in vin_PP:
         if siggen == None:
             command(oscope, f":WGEN:VOLTage {v}") # Set the voltage
-        command(oscope, f"CHANnel1:RANGe {v*1.4}") # Adjust input channel to correctly read the input voltage
+        command(oscope, f"CHANnel1:RANGe {v*1.2}") # Adjust input channel to correctly read the input voltage
         for f in frequencies:
             print(v, f)
             if siggen == None:
@@ -397,16 +441,20 @@ def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, mea
             elif siggen != None:
                 siggen_set_siggen(siggen, v, f)
             command(oscope, f"TIMebase:RANGe {2/(f)}")
-            time.sleep(1.2) # time for the change of timebase to come into effect
             auto_adjust_voltageaxis(oscope, chan2) # Readjust the output channel to correctly read output voltage
             # Take measurements and record data
             v_in = read_measurement(oscope, meas_chan1, statistics=statistics)
             v_out = read_measurement(oscope, meas_chan2, statistics=statistics)
+            if v_in > 10e+10 or v_out > 10e+10:
+                time.sleep(1)
+                v_in = read_measurement(oscope, meas_chan1, statistics=statistics)
+                v_out = read_measurement(oscope, meas_chan2, statistics=statistics)
             v_in_list.append(v_in)
             v_out_list.append(v_out)
             if meas_phase != None:
                 phase = read_measurement(oscope, meas_chan3, statistics=statistics)
                 phase_list.append(phase)
+            print("Voltage ", v, " Vin ", v_in, " Vout ", v_out, " Frequency ", f) # Test
             results_dict[f"v={v} f={f}"] = (v_in, v_out, phase)
 
     # ALL AUTO ADJUST
@@ -572,11 +620,16 @@ if __name__ == "__main__":
 
     #powers_chan_off(powers)
     print("HERE")
-    siggen_set_siggen(siggen, 2, 1000)
+    #powers_chan_off(powers)
+    #powers_chan_off(powers, 2)
+    #siggen_set_siggen(siggen, 2, 1000)
     #powers_set_powers(powers, 7, 3, 1)
     #powers_set_powers(powers, 7, 3, 2)
     #command(oscope, f"TIMebase:RANGe 0.002")
-    #auto_adjust(oscope, 1)
+    #command(oscope, f"CHANnel1:RANGe 0.08")
+    auto_adjust(oscope, 1)
+    auto_adjust(oscope, 2)
+    #print(full_measure(oscope, 4, 'PEAK', 1))
     #acquire_waveform(oscope, 1, plot_graph=True)
 
     #oscope_set_siggen(oscope, 1, 1000, offset=0)
