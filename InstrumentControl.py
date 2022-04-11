@@ -364,21 +364,22 @@ def acquire_waveform(oscope, chan, plot_graph=False, adjust=True, offset=0):
 
 def acquire_waveform_imp(oscope, chan):
     """Acquires waveform."""
-
+    
     command(oscope, '*RST')
-    command(oscope, 'SING;*OPC?')
-    opc = oscope.read()
+    oscope.query('*OPC?')
+    
+    #oscope.clear()
     command(oscope, f'CHAN{chan}:TYPE HRES')
     command(oscope, 'FORM UINT,16')
 
     # Adjust range
-    auto_adjust_imp(oscope)
-
+    #auto_adjust_imp(oscope)
+    oscope.clear()
     # READ CALCULATION VARIABLES
-    x_or = float(read(oscope, f'CHAN{chan}:DATA:XOR?'))
-    y_or = float(read(oscope, f'CHAN{chan}:DATA:YOR?'))
-    x_inc = float(read(oscope, f'CHAN{chan}:DATA:XINC?'))
-    y_inc = float(read(oscope, f'CHAN{chan}:DATA:YINC?'))
+    x_or = float(oscope.query(f'CHAN{chan}:DATA:XOR?'))
+    y_or = float(oscope.query(f'CHAN{chan}:DATA:YOR?'))
+    x_inc = float(oscope.query(f'CHAN{chan}:DATA:XINC?'))
+    y_inc = float(oscope.query(f'CHAN{chan}:DATA:YINC?'))
 
     # DATA ACQUISITION
     data = oscope.query_binary_values(f'CHAN{chan}:DATA?', datatype='b')
@@ -390,6 +391,11 @@ def acquire_waveform_imp(oscope, chan):
 
     return times, voltages
 
+def acquire_waveform_export(oscope, chan):
+    command(oscope, f'EXPort:WAVeform:SOURce {chan}')
+    command(oscope, 'FORMAT CSV')
+    command(oscope, 'EXPort:WAVeform:NAME "/WAVEFORMS/WF1"')
+    command(oscope, 'EXPort:WAVeform:SAVE')
 
 def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, meas_chan4=4, statistics=True, meas_phase=None):
     """Take measurements for the voltages and frequencies specified.
@@ -620,6 +626,9 @@ if __name__ == "__main__":
 
     #powers_chan_off(powers)
     print("HERE")
+    print(find_instruments())
+    acquire_waveform_export(oscope, 1)
+    #print(acquire_waveform_imp(oscope, 1))
     #powers_chan_off(powers)
     #powers_chan_off(powers, 2)
     #siggen_set_siggen(siggen, 2, 1000)
@@ -627,8 +636,8 @@ if __name__ == "__main__":
     #powers_set_powers(powers, 7, 3, 2)
     #command(oscope, f"TIMebase:RANGe 0.002")
     #command(oscope, f"CHANnel1:RANGe 0.08")
-    auto_adjust(oscope, 1)
-    auto_adjust(oscope, 2)
+    #auto_adjust(oscope, 1)
+    #auto_adjust(oscope, 2)
     #print(full_measure(oscope, 4, 'PEAK', 1))
     #acquire_waveform(oscope, 1, plot_graph=True)
 

@@ -2,9 +2,12 @@
 
 # Author: Harry Hamilton-Deeley
 
+from msilib.schema import ComboBox
 from tkinter import *
 import shelve
+from tkinter.ttk import Combobox
 import matplotlib
+from matplotlib.pyplot import disconnect
 import numpy
 import scipy
 from InstrumentControl import *
@@ -20,7 +23,7 @@ class InstrumentationControlApp(Tk):
 
         self.oscope = None
         self.siggen = None
-        self.mmeter = None
+        self.multim = None
         self.powers = None
 
         self.siggen_setting = None
@@ -90,11 +93,12 @@ class ConnectionMenu(Frame):
 
         # Read Initial Settings
         self.ReadSettings_Connect()
+        self.instr_options = find_instruments()
 
         # Create text variables
         self.tk_oscope = StringVar(self, self.oscilloscope1_string)
         self.tk_siggen = StringVar(self, self.signalgenerator1_string)
-        self.tk_mmeter = StringVar(self, self.multimeter1_string)
+        self.tk_multim = StringVar(self, self.multimeter1_string)
         self.tk_powers = StringVar(self, self.powersupply1_string)
 
         # Create buttons, labels and entries
@@ -104,24 +108,24 @@ class ConnectionMenu(Frame):
         self.lbl_heading = Label (self, text='Connection Menu', font=('Montserrat', self.FONTSIZE_LARGE), borderwidth=1, relief="solid")
         self.lbl_oscope = Label (self, text='Oscilloscope:', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_siggen = Label (self, text='Signal Generator:', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
-        self.lbl_mmeter = Label (self, text='Multimeter:', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
+        self.lbl_multim = Label (self, text='Multimeter:', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_powers = Label (self, text='Power Supply:', font=('Montserrat', self.FONTSIZE), fg = master.white, bg = master.dblue2)
         self.lbl_oscope_connect = Label (self, text='Disconnected', fg = 'red', font=('Montserrat', self.FONTSIZE))
         self.lbl_siggen_connect = Label (self, text='Disconnected', fg = 'red', font=('Montserrat', self.FONTSIZE))
-        self.lbl_mmeter_connect = Label (self, text='Disconnected', fg = 'red', font=('Montserrat', self.FONTSIZE))
+        self.lbl_multim_connect = Label (self, text='Disconnected', fg = 'red', font=('Montserrat', self.FONTSIZE))
         self.lbl_powers_connect = Label (self, text='Disconnected', fg = 'red', font=('Montserrat', self.FONTSIZE))
 
         self.btn_connect_oscope = Button (self, command=lambda:[self.connect(master, 'oscope')], text = 'Connect', font=('Montserrat', self.FONTSIZE))
         self.btn_connect_siggen = Button (self, command=lambda:[self.connect(master, 'siggen')], text = 'Connect', font=('Montserrat', self.FONTSIZE))
-        self.btn_connect_mmeter = Button (self, command=lambda:[self.connect(master, 'mmeter')], text = 'Connect', font=('Montserrat', self.FONTSIZE))
+        self.btn_connect_multim = Button (self, command=lambda:[self.connect(master, 'multim')], text = 'Connect', font=('Montserrat', self.FONTSIZE))
         self.btn_connect_powers = Button (self, command=lambda:[self.connect(master, 'powers')], text = 'Connect', font=('Montserrat', self.FONTSIZE))
         self.btn_connect_all = Button (self, command=lambda:[self.connect(master, 'all')], text = 'Connect to all', font=('Montserrat', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(ConnectionMenu)], text = 'RESET', font=('Montserrat', self.FONTSIZE), fg = 'red')
 
-        self.entry_oscope = Entry (self, textvariable = self.tk_oscope, font=('Montserrat', self.FONTSIZE))
-        self.entry_siggen = Entry (self, textvariable = self.tk_siggen, font=('Montserrat', self.FONTSIZE))
-        self.entry_mmeter = Entry (self, textvariable = self.tk_mmeter, font=('Montserrat', self.FONTSIZE))
-        self.entry_powers = Entry (self, textvariable = self.tk_powers, font=('Montserrat', self.FONTSIZE))
+        self.combo_instr_select_oscope = Combobox (self, textvariable = self.tk_oscope, values=self.instr_options, font=('Montserrat', self.FONTSIZE))
+        self.combo_instr_select_siggen = Combobox (self, textvariable = self.tk_siggen, values=self.instr_options, font=('Montserrat', self.FONTSIZE))
+        self.combo_instr_select_multim = Combobox (self, textvariable = self.tk_multim, values=self.instr_options, font=('Montserrat', self.FONTSIZE))
+        self.combo_instr_select_powers = Combobox (self, textvariable = self.tk_powers, values=self.instr_options, font=('Montserrat', self.FONTSIZE))
 
         # Place buttons, labels and entries
         self.btn_home.place(relx=0.06, rely=0.07, anchor=CENTER)
@@ -131,20 +135,23 @@ class ConnectionMenu(Frame):
 
         self.btn_connect_oscope.place(relx=0.1, rely=0.2, anchor=CENTER)
         self.lbl_oscope.place(relx=0.25, rely=0.2, anchor=CENTER)
-        self.entry_oscope.place(relx=0.45, rely=0.2, anchor=CENTER)
+        self.combo_instr_select_oscope.place(relx=0.45, rely=0.2, anchor=CENTER)
+
         self.btn_connect_siggen.place(relx=0.1, rely=0.3, anchor=CENTER)
         self.lbl_siggen.place(relx=0.25, rely=0.3, anchor=CENTER)
-        self.entry_siggen.place(relx=0.45, rely=0.3, anchor=CENTER)
-        self.btn_connect_mmeter.place(relx=0.1, rely=0.4, anchor=CENTER)
-        self.lbl_mmeter.place(relx=0.25, rely=0.4, anchor=CENTER)
-        self.entry_mmeter.place(relx=0.45, rely=0.4, anchor=CENTER)
+        self.combo_instr_select_siggen.place(relx=0.45, rely=0.3, anchor=CENTER)
+
+        self.btn_connect_multim.place(relx=0.1, rely=0.4, anchor=CENTER)
+        self.lbl_multim.place(relx=0.25, rely=0.4, anchor=CENTER)
+        self.combo_instr_select_multim.place(relx=0.45, rely=0.4, anchor=CENTER)
+
         self.btn_connect_powers.place(relx=0.1, rely=0.5, anchor=CENTER)
         self.lbl_powers.place(relx=0.25, rely=0.5, anchor=CENTER)
-        self.entry_powers.place(relx=0.45, rely=0.5, anchor=CENTER)
+        self.combo_instr_select_powers.place(relx=0.45, rely=0.5, anchor=CENTER)
 
         self.lbl_oscope_connect.place(relx=0.65, rely=0.2, anchor=CENTER)
         self.lbl_siggen_connect.place(relx=0.65, rely=0.3, anchor=CENTER)
-        self.lbl_mmeter_connect.place(relx=0.65, rely=0.4, anchor=CENTER)
+        self.lbl_multim_connect.place(relx=0.65, rely=0.4, anchor=CENTER)
         self.lbl_powers_connect.place(relx=0.65, rely=0.5, anchor=CENTER)
 
         self.btn_connect_all.place(relx=0.1, rely=0.62, anchor=CENTER)
@@ -152,29 +159,33 @@ class ConnectionMenu(Frame):
 
         self.check_oscope_connection(master)
         self.check_siggen_connection(master)
-        self.check_mmeter_connection(master)
+        self.check_multim_connection(master)
         self.check_powers_connection(master)
 
     def connect(self, master, instrument):
         if instrument == 'oscope':
+            self.oscilloscope1_string = self.tk_oscope.get()
             master.oscope = connect_instrument(self.oscilloscope1_string)
             if master.oscope != None:
                 self.change_connect_state(self.lbl_oscope_connect, 'On')
             else:
                 self.change_connect_state(self.lbl_oscope_connect, 'Off')
         elif instrument == 'siggen':
+            self.signalgenerator1_string = self.tk_siggen.get()
             master.siggen = connect_instrument(self.signalgenerator1_string)
             if master.siggen != None:
                 self.change_connect_state(self.lbl_siggen_connect, 'On')
             else:
                 self.change_connect_state(self.lbl_siggen_connect, 'Off')
-        elif instrument == 'mmeter':
-            master.mmeter = connect_instrument(self.multimeter1_string)
-            if master.mmeter != None:
-                self.change_connect_state(self.lbl_mmeter_connect, 'On')
+        elif instrument == 'multim':
+            self.multimeter1_string = self.tk_multim.get()
+            master.multim = connect_instrument(self.multimeter1_string)
+            if master.multim != None:
+                self.change_connect_state(self.lbl_multim_connect, 'On')
             else:
-                self.change_connect_state(self.lbl_mmeter_connect, 'Off')
+                self.change_connect_state(self.lbl_multim_connect, 'Off')
         elif instrument == 'powers':
+            self.powersupply1_string = self.tk_powers.get()
             master.powers = connect_instrument(self.powersupply1_string)
             if master.powers != None:
                 self.change_connect_state(self.lbl_powers_connect, 'On')
@@ -183,11 +194,11 @@ class ConnectionMenu(Frame):
         elif instrument == 'all':
             master.oscope = connect_instrument(self.oscilloscope1_string)
             master.siggen = connect_instrument(self.signalgenerator1_string)
-            master.mmeter = connect_instrument(self.multimeter1_string)
+            master.multim = connect_instrument(self.multimeter1_string)
             master.powers = connect_instrument(self.powersupply1_string)
 
-            instr = [master.oscope, master.siggen, master.mmeter, master.powers]
-            instr_lbl = [self.lbl_oscope_connect, self.lbl_siggen_connect, self.lbl_mmeter_connect, self.lbl_powers_connect]
+            instr = [master.oscope, master.siggen, master.multim, master.powers]
+            instr_lbl = [self.lbl_oscope_connect, self.lbl_siggen_connect, self.lbl_multim_connect, self.lbl_powers_connect]
             for i in range(4):
                 if instr[i] != None:
                     self.change_connect_state(instr_lbl[i], 'On')
@@ -215,12 +226,12 @@ class ConnectionMenu(Frame):
         else:
             self.change_connect_state(self.lbl_powers_connect, 'Off')
     
-    def check_mmeter_connection(self, master):
+    def check_multim_connection(self, master):
         """Checks if oscope is connected"""
-        if master.mmeter != None:
-            self.change_connect_state(self.lbl_mmeter_connect, 'On')
+        if master.multim != None:
+            self.change_connect_state(self.lbl_multim_connect, 'On')
         else:
-            self.change_connect_state(self.lbl_mmeter_connect, 'Off')
+            self.change_connect_state(self.lbl_multim_connect, 'Off')
 
     def change_connect_state(self, button, state):
         """Changes the connection state"""
@@ -236,10 +247,10 @@ class ConnectionMenu(Frame):
     """Read and write functions"""
     ###########
     def entry_update_connections(self):
-        self.oscilloscope1_string = self.entry_oscope.get()
-        self.multimeter1_string = self.entry_mmeter.get()
-        self.signalgenerator1_string = self.entry_siggen.get()
-        self.powersupply1_string = self.entry_powers.get()
+        self.oscilloscope1_string = self.tk_oscope.get()
+        self.multimeter1_string = self.tk_multim.get()
+        self.signalgenerator1_string = self.tk_siggen.get()
+        self.powersupply1_string = self.tk_powers.get()
         self.WriteSettings_Connect()
 
     def WriteSettings_Connect(self):
@@ -310,6 +321,7 @@ class OscilloscopeMenu(Frame):
         self.btn_set_siggen = Button (self, state=self.check_connections(master), command=lambda:[self.entry_update_values(), self.set_siggen(master, self.voltage, self.frequency, self.dc_offset, wave_type=self.detect_wavetype())], text = 'Set Signal Generator', height=2, width=18, font=('Montserrat', self.FONTSIZE))
         self.btn_acquire_waveform = Button (self, state=self.check_oscope_connection(master), command=lambda:[self.show_testing_label(), self.update_live_graph(master.oscope, chan1=self.detect_graph(1), chan2=self.detect_graph(2)), self.check_export()], text = 'Acquire Waveforms', height=2, width=16, font=('Montserrat', self.FONTSIZE))
         self.btn_reset = Button (self, command=lambda:[self.Reset(), master.switch_frame(OscilloscopeMenu)], text = 'RESET', font=('Montserrat', self.FONTSIZE), fg = 'red')
+        
         # Create entries and radio buttons
         vcmd = self.register(self.callback_num)
         vcmd_neg = self.register(self.callback_num_neg)
@@ -1014,7 +1026,7 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "2. Verify the power supply output with the multimeter."
             self.lbl_info_2["text"] = "The multimeter allows the output voltage to be confirmed.\nVerification is a useful step to take when running an experiment as it reduces the chance of human and mechanical error."
             self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.multim_v}V."
             self.lbl_img["image"] = self.load_image("Images\power_supply.png", new_size = (550, 300))
             self.lbl_img2["image"] = self.load_image("Images\Multimeter.jpg", new_size = (550, 300))
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
@@ -1066,7 +1078,7 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "2. Verify the power supply output with the multimeter."
             self.lbl_info_2["text"] = "Although the power supply settings have not changed, it is useful to verify the power supply voltage to show a lack of power is the cause of saturation."
             self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.multim_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
             self.lbl_info_3.place(relx=0.5, rely=0.65, anchor=CENTER)
@@ -1116,7 +1128,7 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "2. Verify the power supply output with the multimeter."
             self.lbl_info_2["text"] = "The power supply has had its output increased so it is especially important to verify this change has taken effect."
             self.lbl_info_3["text"] = f"The power supply is set to output: {self.powers_v}V at each terminal.\nTogether this equals {self.powers_v*2}V."
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V."
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.multim_v}V."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.40, anchor=CENTER)
             self.lbl_info_3.place(relx=0.5, rely=0.65, anchor=CENTER)
@@ -1164,12 +1176,12 @@ class DemoMenu(Frame):
             #Connect the unused ports for chan1 and chan2 of power supply together to form ground
         elif self.demo_stage-1 in self.demo_parts: # Check power supply with multimeter
             print("2 - Multimeter reading")
-            self.mmeter_v = mmeter_get_voltage(master.mmeter) # Check power supply with multi meter
-            self.mmeter_v = f"{float(str(self.mmeter_v)):.4f}"
-            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.mmeter_v}V"
+            self.multim_v = multim_get_voltage(master.multim) # Check power supply with multi meter
+            self.multim_v = f"{float(str(self.multim_v)):.4f}"
+            self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.multim_v}V"
             print("Power supply V", self.powers_v)
             print("Power supply V", self.siggen_v)
-            print("multimeter V", self.mmeter_v)
+            print("multimeter V", self.multim_v)
         elif self.demo_stage-2 in self.demo_parts: # Calculate predicted gain
             self.gain = self.calc_gain_r(self.R1, self.R2)
         elif self.demo_stage-3 in self.demo_parts: # Set the signal generator
@@ -1238,9 +1250,9 @@ class DemoMenu(Frame):
 
     def check_connections(self, master):
         if master.siggen_setting == None:
-            state = self.check_oscope_connection(master) or self.check_powers_connection(master) or self.check_mmeter_connection(master)
+            state = self.check_oscope_connection(master) or self.check_powers_connection(master) or self.check_multim_connection(master)
         else:
-            state = self.check_siggen_connection(master) or self.check_oscope_connection(master) or self.check_powers_connection(master) or self.check_mmeter_connection(master)
+            state = self.check_siggen_connection(master) or self.check_oscope_connection(master) or self.check_powers_connection(master) or self.check_multim_connection(master)
         if state == DISABLED:
             self.lbl_connect_first['text']='Please connect to an oscilloscope, power supply and multimeter\nfrom the connections menu to run the op-amp demo'
         else:
@@ -1281,9 +1293,9 @@ class DemoMenu(Frame):
         else:
             return DISABLED
     
-    def check_mmeter_connection(self, master):
+    def check_multim_connection(self, master):
         """Checks if oscope is connected"""
-        if master.mmeter != None:
+        if master.multim != None:
             return NORMAL            
         else:
             return DISABLED
