@@ -31,13 +31,6 @@ def command(instrument, command):
     print(instrument.write(command))
 
 
-def read(instrument, command):
-    "Reads from oscilloscope"
-    data = instrument.query(command)
-
-    return data
-
-
 # ------------------
 # SETUP FUNCTIONS SETTINGS
 # -----------------
@@ -365,8 +358,8 @@ def acquire_waveform(oscope, chan, plot_graph=False, adjust=True, offset=0):
 def acquire_waveform_imp(oscope, chan):
     """Acquires waveform."""
     
-    command(oscope, '*RST')
-    oscope.query('*OPC?')
+    #command(oscope, '*RST')
+    oscope.query('SING;*OPC?')
     
     #oscope.clear()
     command(oscope, f'CHAN{chan}:TYPE HRES')
@@ -391,11 +384,13 @@ def acquire_waveform_imp(oscope, chan):
 
     return times, voltages
 
+
 def acquire_waveform_export(oscope, chan):
     command(oscope, f'EXPort:WAVeform:SOURce {chan}')
     command(oscope, 'FORMAT CSV')
     command(oscope, 'EXPort:WAVeform:NAME "/WAVEFORMS/WF1"')
     command(oscope, 'EXPort:WAVeform:SAVE')
+
 
 def test_circuit(oscope, vin_PP, frequencies, siggen=None, chan1=1, chan2=2, meas_chan1=1, meas_chan2=2, meas_chan3=3, meas_chan4=4, statistics=True, meas_phase=None):
     """Take measurements for the voltages and frequencies specified.
