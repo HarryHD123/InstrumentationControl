@@ -2,7 +2,6 @@
 
 # Author: Harry Hamilton-Deeley
 
-from msilib.schema import ComboBox
 from tkinter import *
 import shelve
 from tkinter.ttk import Combobox
@@ -1176,7 +1175,7 @@ class DemoMenu(Frame):
             #Connect the unused ports for chan1 and chan2 of power supply together to form ground
         elif self.demo_stage-1 in self.demo_parts: # Check power supply with multimeter
             print("2 - Multimeter reading")
-            self.multim_v = multim_get_voltage(master.multim) # Check power supply with multi meter
+            self.multim_v = mmeter_get_voltage(master.multim) # Check power supply with multi meter
             self.multim_v = f"{float(str(self.multim_v)):.4f}"
             self.lbl_info_4["text"] = f"The multimeter is measuring a voltage of: {self.multim_v}V"
             print("Power supply V", self.powers_v)
