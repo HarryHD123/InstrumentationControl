@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 import matplotlib.backends.backend_tkagg as agg
     
-def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False, cutoff_data = None, size=(7,5), colour = 'b'):
+def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False, cutoff_data = None, size=(7,5), colour = 'b', maxmise = True):
     """Plots a graph embedded into a Tkinter frame"""
 
     fig = plt.figure(figsize=size)
@@ -23,7 +23,8 @@ def EmbedGraph(data, heading = "", x_label = "", y_label = "", log_graph = False
     plt.xlabel(f'{x_label}')
     plt.title(f'{heading}')
     plt.grid(which='both')
-    plt.autoscale()
+    if maxmise:
+        plt.autoscale()
     plt.tight_layout()
     canvas = agg.FigureCanvasTkAgg(fig)
     canvas.draw()
