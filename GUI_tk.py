@@ -6,7 +6,6 @@ from tkinter import *
 import shelve
 from tkinter.ttk import Combobox
 import matplotlib
-from matplotlib.pyplot import disconnect
 import numpy
 import scipy
 from InstrumentControl import *
@@ -66,7 +65,7 @@ class MainMenu(Frame):
         self.border = Label (self, bg = master.dblue2, height=20, width=180)
         self.btn_testmenu = Button (self, command=lambda: master.switch_frame(FreqRespMenu), text = 'Measure Frequency Response', width=25, font=('Montserrat', self.FONTSIZE), fg = master.dblue, bg = master.white)
         self.btn_connectionmenu = Button (self, command=lambda: master.switch_frame(ConnectionMenu), text = 'Connection Menu', width=25, font=('Montserrat', self.FONTSIZE), fg = master.dblue, bg = master.white)
-        self.btn_oscilloscopemenu = Button (self, command=lambda: master.switch_frame(OscilloscopeMenu), text = 'Oscilloscope Screen', width=25, font=('Montserrat', self.FONTSIZE), fg = master.dblue, bg = master.white)
+        self.btn_oscilloscopemenu = Button (self, command=lambda: master.switch_frame(OscilloscopeMenu), text = 'Oscilloscope Livescreen', width=25, font=('Montserrat', self.FONTSIZE), fg = master.dblue, bg = master.white)
         self.btn_demomenu = Button (self, command=lambda: master.switch_frame(DemoMenu), text = 'Op-Amp Demo', width=25, font=('Montserrat', self.FONTSIZE), fg = master.dblue, bg = master.white)
 
         # Place buttons and labels
@@ -974,7 +973,7 @@ class DemoMenu(Frame):
             self.lbl_info_1["text"] = "This demonstration is designed to teach you about saturation."
             self.lbl_info_2["text"] = "The circuit is the inverting op-amp amplifier which will be used to carry out the following demonstration."
             self.lbl_img["image"] = self.load_image("Images\op_amp_circ2.png", new_size = (700, 400))
-            self.lbl_img2["image"] = self.load_image("Images\circ_genV.png", new_size = (400, 400), num = 2)
+            self.lbl_img2["image"] = self.load_image("Images\circ_genV.png", new_size = (300, 400), num = 2)
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
             self.lbl_info_2.place(relx=0.5, rely=0.35, anchor=CENTER)
             self.lbl_img.place(relx=0.35, rely=0.65, anchor=CENTER)
@@ -1052,6 +1051,7 @@ class DemoMenu(Frame):
             # Complete + pic
             self.lbl_info_1["text"] = f"4. The signal generator is set to output {self.siggen_v}V at a frequency of {self.frequency}Hz."
             self.lbl_info_1.place(relx=0.5, rely=0.30, anchor=CENTER)
+            
         elif self.demo_stage == 11:
             # Enter values
             self.lbl_info_1["text"] = "5. Measure the actual gain and compare with the predicted value."
